@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: resqgrid
+    env: python
+    buildCommand: "pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput"
+    startCommand: "gunicorn resqgrid_project.wsgi:application --bind 0.0.0.0:$PORT"
+    healthCheckPath: /health/
+    envVars:
+      - key: RESQGRID_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
+      - key: SECURE_HSTS_SECONDS
+        value: "3600"
+      - key: SECURE_HSTS_INCLUDE_SUBDOMAINS
+        value: "False"
+      - key: SECURE_HSTS_PRELOAD
+        value: "False"
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: CARTO_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: resqgrid-db
+          property: connectionString
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+databases:
+  - name: resqgrid-db
+    plan: free
+    databaseName: resqgrid

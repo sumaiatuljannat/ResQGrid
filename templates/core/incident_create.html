@@ -1,0 +1,268 @@
+{% extends 'base.html' %}
+
+{% block title %}Report Emergency SOS - ResQGrid{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+
+            <div class="card card-resq shadow-sm border-danger">
+                <div class="card-header bg-white py-3 sos-form-header">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h1 class="h4 mb-0 fw-bold text-navy"><i class="fa-solid fa-bullhorn text-danger me-2"></i> Report an Emergency</h1>
+                            <small class="text-muted">Your report is prioritized for coordination. For immediate official emergency response in Bangladesh, call 999.</small>
+                        </div>
+                        <span class="badge bg-white text-danger fw-bold">Live Triage</span>
+                    </div>
+                </div>
+
+                <div class="card-body p-4">
+                    <form method="post" id="sosForm">
+                        {% csrf_token %}
+                        {{ form.is_gps_derived }}
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                        {% endif %}
+
+                        <!-- Section 1: Reporting Mode & Distress Contacts -->
+                        <div class="p-3 bg-light rounded border mb-4">
+                            <h5 class="fw-bold text-navy mb-3"><i class="fa-solid fa-user-shield me-2 text-primary"></i> 1. Reporting Mode & Contact</h5>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="{{ form.reported_for.id_for_label }}" class="form-label fw-semibold">Reporting For <span class="required-indicator">(required)</span></label>
+                                    {{ form.reported_for }}
+                                </div>
+                                <div class="col-md-6" id="victim_name_field">
+                                    <label for="{{ form.victim_name.id_for_label }}" class="form-label fw-semibold">Victim / Distressed Party Name</label>
+                                    {{ form.victim_name }}
+                                    <small class="text-muted">Required if reporting on behalf of someone else</small>
+                                    {{ form.victim_name.errors }}
+                                </div>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="{{ form.contact_name.id_for_label }}" class="form-label fw-semibold">On-Scene Contact Name <span class="required-indicator">(required)</span></label>
+                                    {{ form.contact_name }}
+                                    {{ form.contact_name.errors }}
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="{{ form.contact_phone.id_for_label }}" class="form-label fw-semibold">Emergency Phone Number <span class="required-indicator">(required)</span></label>
+                                    {{ form.contact_phone }}
+                                    {{ form.contact_phone.errors }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Emergency Nature & Severity Factors (Module B) -->
+                        <div class="p-3 bg-light rounded border mb-4">
+                            <h5 class="fw-bold text-navy mb-3"><i class="fa-solid fa-triangle-exclamation me-2 text-danger"></i> 2. Nature of Emergency & Severity</h5>
+
+                            <div class="mb-3">
+                                <label for="{{ form.emergency_type.id_for_label }}" class="form-label fw-semibold">Emergency Type <span class="required-indicator">(required)</span></label>
+                                {{ form.emergency_type }}
+                                {{ form.emergency_type.errors }}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">Incident Description & Immediate Hazards <span class="required-indicator">(required)</span></label>
+                                {{ form.description }}
+                                <small class="text-muted">Detail rising water levels, structural collapse, smoke, entrapment, or urgent needs.</small>
+                                {{ form.description.errors }}
+                            </div>
+
+                            <div class="p-3 bg-danger bg-opacity-10 border border-danger rounded mb-3">
+                                <div class="form-check form-switch fs-6">
+                                    {{ form.immediate_threat_to_life }}
+                                    <label class="form-check-label fw-bold text-danger" for="{{ form.immediate_threat_to_life.id_for_label }}">
+                                        Immediate Threat to Human Life Active (Critical Priority Trigger)
+                                    </label>
+                                </div>
+                                <small class="text-muted d-block ms-4">Check if victims are in imminent peril of drowning, burning, severe hemorrhage, or suffocation.</small>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-sm-4">
+                                    <label for="{{ form.affected_count.id_for_label }}" class="form-label fw-semibold">Total Affected Count <span class="required-indicator">(required)</span></label>
+                                    {{ form.affected_count }}
+                                    {{ form.affected_count.errors }}
+                                </div>
+                                <div class="col-sm-4">
+                                    <label for="{{ form.injured_count.id_for_label }}" class="form-label fw-semibold">Injured Count</label>
+                                    {{ form.injured_count }}
+                                    {{ form.injured_count.errors }}
+                                </div>
+                                <div class="col-sm-4">
+                                    <label for="{{ form.trapped_count.id_for_label }}" class="form-label fw-semibold">Physically Trapped Count</label>
+                                    {{ form.trapped_count }}
+                                    {{ form.trapped_count.errors }}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.has_vulnerable_people }}
+                                    <label class="form-check-label fw-semibold" for="{{ form.has_vulnerable_people.id_for_label }}">
+                                        Vulnerable individuals present (Infants, pregnant women, elderly, mobility impaired)
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3" id="vulnerable_details_field">
+                                <label for="{{ form.vulnerable_details.id_for_label }}" class="form-label fw-semibold">Vulnerability Details</label>
+                                {{ form.vulnerable_details }}
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="{{ form.access_difficulty.id_for_label }}" class="form-label fw-semibold">Physical Access Difficulty <span class="required-indicator">(required)</span></label>
+                                {{ form.access_difficulty }}
+                                <small class="text-muted">Helps the matching engine dispatch boats or specialized 4x4 vehicles if access is blocked.</small>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Geolocation & Map Picker -->
+                        <div class="p-3 bg-light rounded border mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold text-navy mb-0"><i class="fa-solid fa-map-location-dot me-2 text-success"></i> 3. Incident Location & Coordinates</h5>
+                                <button type="button" class="btn btn-outline-danger btn-sm fw-bold" onclick="autoDetectLocation()">
+                                    <i class="fa-solid fa-crosshairs me-1"></i> Detect My GPS Location
+                                </button>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.location_name.id_for_label }}" class="form-label fw-semibold">Street Address / Landmark Location <span class="required-indicator">(required)</span></label>
+                                {{ form.location_name }}
+                                {{ form.location_name.errors }}
+                            </div>
+
+                            <!-- Interactive Leaflet Pin Dropper -->
+                            <div class="mb-2">
+                                <label class="form-label small fw-semibold text-muted" id="location-picker-label">Click anywhere on the map to place or drag the emergency pin:</label>
+                                <div id="picker-map" role="application" aria-labelledby="location-picker-label"></div>
+                            </div>
+
+                            <div class="row g-3 mb-2">
+                                <div class="col-sm-6">
+                                    <label for="{{ form.latitude.id_for_label }}" class="form-label fw-semibold small">Latitude</label>
+                                    {{ form.latitude }}
+                                    {{ form.latitude.errors }}
+                                </div>
+                                <div class="col-sm-6">
+                                    <label for="{{ form.longitude.id_for_label }}" class="form-label fw-semibold small">Longitude</label>
+                                    {{ form.longitude }}
+                                    {{ form.longitude.errors }}
+                                </div>
+                            </div>
+
+                            <!-- Preset Coordinate Quick Buttons -->
+                            <div class="d-flex flex-wrap gap-2 small">
+                                <span class="text-muted align-self-center">Quick Presets:</span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="setCoordinates(23.8103, 90.4125, 'Dhaka, Bangladesh')">Dhaka</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="setCoordinates(22.3569, 91.7832, 'Chittagong Port, Bangladesh')">Chittagong</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="setCoordinates(24.8949, 91.8687, 'Sylhet Sadar, Bangladesh')">Sylhet</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="setCoordinates(22.8456, 89.5403, 'Khulna Sadar, Bangladesh')">Khulna</button>
+                            </div>
+                        </div>
+
+                        <!-- Submit CTA -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-sos py-3 fs-5" id="submitBtn">
+                                <i class="fa-solid fa-shield-halved me-2"></i> Submit Emergency SOS for Instant Triage & Dispatch
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let marker;
+let map;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Leaflet Map Picker
+    const initLat = parseFloat(document.getElementById('id_latitude').value) || 23.8103;
+    const initLon = parseFloat(document.getElementById('id_longitude').value) || 90.4125;
+
+    map = L.map('picker-map').setView([initLat, initLon], 12);
+    ResQGridMaps.addBasemaps(map);
+    ResQGridMaps.watchResize(map);
+
+    // Initial marker
+    marker = L.marker([initLat, initLon], { draggable: true }).addTo(map);
+
+    marker.on('dragend', function(e) {
+        const pos = marker.getLatLng();
+        updateCoordInputs(pos.lat, pos.lng, false);
+    });
+
+    map.on('click', function(e) {
+        marker.setLatLng(e.latlng);
+        updateCoordInputs(e.latlng.lat, e.latlng.lng, false);
+    });
+
+    // Form logic: Toggle victim name based on reporting_for
+    const reportedFor = document.getElementById('id_reported_for');
+    function toggleVictimField() {
+        const victimField = document.getElementById('victim_name_field');
+        if (reportedFor.value === 'OTHER') {
+            victimField.style.display = 'block';
+        } else {
+            victimField.style.display = 'none';
+        }
+    }
+    if (reportedFor) {
+        reportedFor.addEventListener('change', toggleVictimField);
+        toggleVictimField();
+    }
+});
+
+function updateCoordInputs(lat, lon, isGps) {
+    document.getElementById('id_latitude').value = lat.toFixed(6);
+    document.getElementById('id_longitude').value = lon.toFixed(6);
+    if (isGps) {
+        document.getElementById('id_is_gps_derived').value = "true";
+    }
+}
+
+function setCoordinates(lat, lon, name) {
+    updateCoordInputs(lat, lon, false);
+    if (marker && map) {
+        marker.setLatLng([lat, lon]);
+        map.setView([lat, lon], 12);
+    }
+    const locInput = document.getElementById('id_location_name');
+    if (locInput && !locInput.value) {
+        locInput.value = name;
+    }
+}
+
+function autoDetectLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            updateCoordInputs(lat, lon, true);
+            if (marker && map) {
+                marker.setLatLng([lat, lon]);
+                map.setView([lat, lon], 14);
+            }
+            alert("Browser location acquired: " + lat.toFixed(4) + ", " + lon.toFixed(4));
+        }, function(err) {
+            alert("Unable to acquire GPS location: " + err.message + ". Please click on the map or type your address.");
+        }, { timeout: 10000 });
+    } else {
+        alert("Geolocation is not supported by your browser.");
+    }
+}
+</script>
+{% endblock %}

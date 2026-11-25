@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% load resqgrid_tags %}
+
+{% block title %}Emergency Incidents Directory - ResQGrid{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-2 border-bottom">
+        <div>
+            <h1 class="h2 fw-bold text-navy mb-1"><i class="fa-solid fa-clipboard-list text-primary me-2"></i> Emergency Incidents Directory</h1>
+            <p class="text-muted mb-0">Unified repository of active and historical emergency responses across all sectors</p>
+        </div>
+        <div class="d-flex gap-2 mt-2 mt-sm-0">
+            <a href="{% url 'incident_create' %}" class="btn btn-danger btn-sm fw-bold">
+                <i class="fa-solid fa-bell me-1"></i> Report SOS
+            </a>
+            <a href="{% url 'map_view' %}" class="btn btn-outline-primary btn-sm">
+                <i class="fa-solid fa-map-location-dot me-1"></i> Live Grid Map
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card card-resq mb-4">
+        <div class="card-body p-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+                        <input type="text" name="q" class="form-control" aria-label="Search incidents by ID, location, or description" placeholder="Search ID, location, description..." value="{{ q_search }}">
+                    </div>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="status" class="form-select form-select-sm" aria-label="Filter by incident status">
+                        <option value="">All Statuses</option>
+                        {% for st_val, st_lbl in incident_statuses %}
+                            <option value="{{ st_val }}" {% if f_status == st_val %}selected{% endif %}>{{ st_lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="priority" class="form-select form-select-sm" aria-label="Filter by priority">
+                        <option value="">All Priorities</option>
+                        {% for pr_val, pr_lbl in priority_levels %}
+                            <option value="{{ pr_val }}" {% if f_priority == pr_val %}selected{% endif %}>{{ pr_lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="type" class="form-select form-select-sm" aria-label="Filter by emergency type">
+                        <option value="">All Types</option>
+                        {% for ty_val, ty_lbl in emergency_types %}
+                            <option value="{{ ty_val }}" {% if f_type == ty_val %}selected{% endif %}>{{ ty_lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="sort" class="form-select form-select-sm" aria-label="Sort incidents">
+                        <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Newest First</option>
+                        <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Oldest First</option>
+                        <option value="-priority_score" {% if sort_by == '-priority_score' %}selected{% endif %}>Highest Score</option>
+                    </select>
+                </div>
+
+                <div class="col-md-1 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">Filter</button>
+                    {% if q_search or f_status or f_priority or f_type %}
+                        <a href="{% url 'incident_list' %}" class="btn btn-outline-secondary btn-sm" title="Clear Filters" aria-label="Clear incident filters"><i class="fa-solid fa-rotate-left"></i></a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Incidents Table -->
+    <div class="card card-resq">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-resq table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Incident ID</th>
+                            <th>Priority Tier</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Affected / Casualties</th>
+                            <th>Workflow Status</th>
+                            <th>Assigned Responder</th>
+                            <th>Reported</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if incidents %}
+                            {% for inc in incidents %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'incident_detail' inc.incident_id %}" class="fw-bold text-decoration-none">
+                                            {{ inc.incident_id }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ inc.priority_level|priority_badge_class }} px-2 py-1">
+                                            {{ inc.priority_level }} ({{ inc.priority_score }})
+                                        </span>
+                                    </td>
+                                    <td><strong>{{ inc.get_emergency_type_display }}</strong></td>
+                                    <td><span class="small">{{ inc.location_name }}</span></td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border"><i class="fa-solid fa-users text-secondary me-1"></i> {{ inc.affected_count }}</span>
+                                        {% if inc.injured_count > 0 %}<span class="badge bg-danger text-white">{{ inc.injured_count }} injured</span>{% endif %}
+                                        {% if inc.trapped_count > 0 %}<span class="badge bg-dark text-white">{{ inc.trapped_count }} trapped</span>{% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ inc.status|status_badge_class }}">
+                                            {{ inc.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if inc.assigned_responder %}
+                                            <span class="small text-primary fw-semibold"><i class="fa-solid fa-user-shield me-1"></i> {{ inc.assigned_responder.get_full_name|default:inc.assigned_responder.username }}</span>
+                                        {% elif inc.status == 'UNASSIGNED' %}
+                                            <span class="badge bg-danger">Unassigned</span>
+                                        {% else %}
+                                            <span class="text-muted small">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><small class="text-muted">{{ inc.created_at|timesince }} ago</small></td>
+                                    <td class="text-end">
+                                        <a href="{% url 'incident_detail' inc.incident_id %}" class="btn btn-outline-primary btn-sm">
+                                            View
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="text-center py-5 text-muted">
+                                    No emergency incidents match the current criteria.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% if incidents.has_other_pages %}
+    <nav class="mt-3" aria-label="Incident pagination">
+        <ul class="pagination justify-content-center">
+            {% if incidents.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ incidents.previous_page_number }}&q={{ q_search }}&status={{ f_status }}&priority={{ f_priority }}&type={{ f_type }}&sort={{ sort_by }}">Previous</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ incidents.number }} / {{ incidents.paginator.num_pages }}</span></li>
+            {% if incidents.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ incidents.next_page_number }}&q={{ q_search }}&status={{ f_status }}&priority={{ f_priority }}&type={{ f_type }}&sort={{ sort_by }}">Next</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+</div>
+{% endblock %}

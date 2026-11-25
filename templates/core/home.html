@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+{% load resqgrid_tags %}
+
+{% block title %}ResQGrid - Intelligent Emergency Response & Humanitarian Network{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <!-- Hero Section -->
+    <div class="landing-hero mb-4">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="hero-eyebrow mb-3">
+                    <i class="fa-solid fa-shield-halved me-2"></i> Emergency coordination for Bangladesh
+                </div>
+                <h1 class="display-5 fw-bold mb-3">A clearer path from emergency report to coordinated response.</h1>
+                <p class="lead mb-4">
+                    {{ PROJECT_TAGLINE }} ResQGrid brings incident triage, responder coordination, and shelter capacity information into one operational view.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="{% url 'incident_create' %}" class="btn btn-sos">
+                        <i class="fa-solid fa-bullhorn me-2"></i> Report Emergency SOS
+                    </a>
+                    <a href="{% url 'map_view' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="fa-solid fa-map-location-dot me-2"></i> Live Grid Map
+                    </a>
+                    <a href="{% url 'shelter_list' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="fa-solid fa-tents me-2"></i> Evacuation Shelters
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4 mt-4 mt-lg-0">
+                <div class="hero-assurance">
+                    <div class="hero-assurance-title"><i class="fa-solid fa-circle-info me-2"></i> Built for accountable coordination</div>
+                    <ul class="mb-0">
+                        <li>Human-readable incident priority explanations</li>
+                        <li>Verified responder matching and assignment tracking</li>
+                        <li>Database-backed shelter capacity information</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live System Metrics (Database Driven) -->
+    <div class="row g-3 mb-5">
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card stat-critical">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-label">Active Emergencies</div>
+                        <div class="stat-value">{{ active_incidents }}</div>
+                    </div>
+                    <div class="p-3 bg-danger bg-opacity-10 rounded-circle text-danger fs-3">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                </div>
+                <small class="text-muted"><i class="fa-solid fa-clock me-1"></i> Requiring active coordination</small>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card stat-responders">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-label">Verified Responders</div>
+                        <div class="stat-value">{{ total_responders }}</div>
+                    </div>
+                    <div class="p-3 bg-primary bg-opacity-10 rounded-circle text-primary fs-3">
+                        <i class="fa-solid fa-kit-medical"></i>
+                    </div>
+                </div>
+                <small class="text-muted"><i class="fa-solid fa-check-double me-1"></i> Certified & dispatch ready</small>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card stat-shelters">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-label">Open Shelters</div>
+                        <div class="stat-value">{{ open_shelters }}</div>
+                    </div>
+                    <div class="p-3 bg-success bg-opacity-10 rounded-circle text-success fs-3">
+                        <i class="fa-solid fa-tents"></i>
+                    </div>
+                </div>
+                <small class="text-muted"><i class="fa-solid fa-shield me-1"></i> Atomic capacity monitored</small>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-label">Resolved Missions</div>
+                        <div class="stat-value text-success">{{ resolved_incidents }}</div>
+                    </div>
+                    <div class="p-3 bg-secondary bg-opacity-10 rounded-circle text-secondary fs-3">
+                        <i class="fa-solid fa-flag-checkered"></i>
+                    </div>
+                </div>
+                <small class="text-muted"><i class="fa-solid fa-circle-check me-1"></i> Full audit logged</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core Engineering Highlights (A02 & A07) -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-6">
+            <div class="card card-resq h-100 p-4 border-primary">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="badge bg-primary fs-6 me-2">Challenge A02</span>
+                    <h4 class="mb-0 fw-bold">Intelligent Priority Engine</h4>
+                </div>
+                <p class="text-muted">
+                    Transparent, explainable triage scoring calculated deterministically from seven empirical factors:
+                </p>
+                <ul class="list-unstyled mb-4">
+                    <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i><strong>Immediate threat to life:</strong> Automatic critical priority boost.</li>
+                    <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i><strong>Trapped & injured counts:</strong> Scaled casualty weighting.</li>
+                    <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i><strong>Vulnerability indicators:</strong> Prioritization for infants, elderly, and mobility limitations.</li>
+                    <li class="mb-2"><i class="fa-solid fa-check text-success me-2"></i><strong>Dynamic delay penalty:</strong> Escalates priority for unassigned waiting emergencies.</li>
+                </ul>
+                <div class="mt-auto p-3 bg-light rounded small text-secondary">
+                    <i class="fa-solid fa-lightbulb text-warning me-1"></i> Every incident includes an itemized, human-readable scoring explanation for dispatcher clarity.
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card card-resq h-100 p-4 border-info">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="badge bg-info text-dark fs-6 me-2">Challenge A07</span>
+                    <h4 class="mb-0 fw-bold">Automated Multi-Step Workflow</h4>
+                </div>
+                <p class="text-muted">
+                    End-to-end resilient orchestration from initial SOS to post-incident resolution:
+                </p>
+                <div class="workflow-steps p-2 mb-3 bg-light rounded text-center small fw-semibold" role="group" aria-label="Incident workflow: reported, triaged, assigned, accepted, responding, resolved">
+                    <span>REPORTED</span> <i class="fa-solid fa-arrow-right text-muted"></i>
+                    <span>TRIAGED</span> <i class="fa-solid fa-arrow-right text-muted"></i>
+                    <span>ASSIGNED</span> <i class="fa-solid fa-arrow-right text-muted"></i>
+                    <span>ACCEPTED</span> <i class="fa-solid fa-arrow-right text-muted"></i>
+                    <span>RESPONDING</span> <i class="fa-solid fa-arrow-right text-muted"></i>
+                    <span>RESOLVED</span>
+                </div>
+                <p class="small text-secondary mb-3">
+                    Includes automatic failover: If a responder declines or is unreachable, the system automatically checks the next eligible responder. If none are eligible, it alerts dispatch with an UNASSIGNED diagnostic log.
+                </p>
+                <div class="mt-auto p-3 bg-light rounded small text-secondary">
+                    <i class="fa-solid fa-database text-primary me-1"></i> Concurrency-safe atomic state transitions prevent duplicate dispatch or orphan assignments.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if show_demo_accounts %}
+    <!-- Quick Demo Accounts Access -->
+    <div class="card card-resq p-4 bg-light border">
+        <h4 class="fw-bold mb-3"><i class="fa-solid fa-vial-circle-check text-primary me-2"></i> Quick Hackathon Testing Accounts</h4>
+        <p class="text-muted mb-4">
+            Test all three user roles with pre-configured seeded accounts:
+        </p>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="p-3 bg-white rounded border h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong class="text-danger"><i class="fa-solid fa-sliders me-1"></i> Administrator</strong>
+                        <span class="badge bg-danger">Full Control</span>
+                    </div>
+                    <p class="small text-muted mb-2">Full access to triage queue, manual dispatch override, responder verification, and shelter capacity.</p>
+                    <div class="small font-monospace bg-light p-2 rounded mb-3">
+                        Username: <strong>admin</strong><br>
+                        Password: <strong>{{ demo_password }}</strong>
+                    </div>
+                    <a href="{% url 'login' %}?demo=admin" class="btn btn-outline-danger btn-sm w-100">
+                        Login as Admin
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 bg-white rounded border h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong class="text-primary"><i class="fa-solid fa-truck-medical me-1"></i> Responder</strong>
+                        <span class="badge bg-primary">Boat & USAR</span>
+                    </div>
+                    <p class="small text-muted mb-2">Responder console to accept/reject assignments, update deployment status, and view mission logs.</p>
+                    <div class="small font-monospace bg-light p-2 rounded mb-3">
+                        Username: <strong>responder_boat</strong><br>
+                        Password: <strong>{{ demo_password }}</strong>
+                    </div>
+                    <a href="{% url 'login' %}?demo=responder" class="btn btn-outline-primary btn-sm w-100">
+                        Login as Responder
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="p-3 bg-white rounded border h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong class="text-info"><i class="fa-solid fa-user me-1"></i> Citizen</strong>
+                        <span class="badge bg-info text-dark">Reporter</span>
+                    </div>
+                    <p class="small text-muted mb-2">Report emergencies with GPS geolocation, view personal incident tracking timeline, and locate safe shelters.</p>
+                    <div class="small font-monospace bg-light p-2 rounded mb-3">
+                        Username: <strong>citizen_karim</strong><br>
+                        Password: <strong>{{ demo_password }}</strong>
+                    </div>
+                    <a href="{% url 'login' %}?demo=citizen" class="btn btn-outline-info btn-sm w-100">
+                        Login as Citizen
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

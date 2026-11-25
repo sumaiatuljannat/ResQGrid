@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% load resqgrid_tags %}
+
+{% block title %}Citizen Emergency Portal - ResQGrid{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Welcome & SOS Action Banner -->
+    <div class="card card-resq dashboard-hero mb-4">
+        <div class="card-body p-4 text-white">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <span class="badge bg-info text-dark mb-2">Citizen Portal</span>
+                    <h1 class="h3 fw-bold mb-1">Emergency Assistance Hub</h1>
+                    <p class="text-light opacity-75 mb-0">
+                        Welcome, {{ user.get_full_name|default:user.username }}. Report emergency situations immediately or track real-time assistance dispatched to your reported incidents.
+                    </p>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <a href="{% url 'incident_create' %}" class="btn btn-sos btn-lg w-100 w-md-auto">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i> Report Emergency SOS
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reported Incidents Section -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card card-resq">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-clipboard-list text-primary me-2"></i> My Emergency Reports</h5>
+                    <span class="badge bg-light text-dark border">{{ my_incidents.count }} Report(s)</span>
+                </div>
+                <div id="incident-status-refresh" class="px-3 py-2 border-bottom small text-muted" role="status" aria-live="polite">
+                    Live incident status checks are active.
+                </div>
+                <div class="card-body p-0">
+                    {% if my_incidents %}
+                        <div class="list-group list-group-flush">
+                            {% for inc in my_incidents %}
+                                <div class="list-group-item p-3">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <span class="badge {{ inc.priority_level|priority_badge_class }} me-1">
+                                                {{ inc.priority_level }} ({{ inc.priority_score }})
+                                            </span>
+                                            <a href="{% url 'incident_detail' inc.incident_id %}" class="fw-bold text-navy text-decoration-none fs-6">
+                                                {{ inc.incident_id }}: {{ inc.get_emergency_type_display }}
+                                            </a>
+                                        </div>
+                                        <span class="badge {{ inc.status|status_badge_class }} px-2 py-1">
+                                            Status: {{ inc.get_status_display }}
+                                        </span>
+                                    </div>
+
+                                    <p class="text-muted small mb-2">
+                                        <i class="fa-solid fa-location-dot text-danger me-1"></i> {{ inc.location_name }} &bull;
+                                        <i class="fa-solid fa-users text-secondary ms-2 me-1"></i> {{ inc.affected_count }} affected
+                                        {% if inc.injured_count > 0 %}&bull; <span class="text-danger fw-semibold">{{ inc.injured_count }} injured</span>{% endif %}
+                                        {% if inc.trapped_count > 0 %}&bull; <span class="text-danger fw-semibold">{{ inc.trapped_count }} trapped</span>{% endif %}
+                                    </p>
+
+                                    <!-- Progress Stepper -->
+                                    <div class="incident-progress my-2" role="group" aria-label="Incident status progress">
+                                        <span class="incident-progress-step is-complete"{% if inc.status == 'REPORTED' %} aria-current="step"{% endif %}>
+                                            <i class="fa-solid fa-circle-check me-1"></i> 1. Reported
+                                        </span>
+                                        <i class="fa-solid fa-angle-right text-muted step-separator" aria-hidden="true"></i>
+                                        <span class="incident-progress-step{% if inc.status in 'TRIAGED,UNASSIGNED,ASSIGNED,ACCEPTED,RESPONDING,RESOLVED' %} is-complete{% endif %}"{% if inc.status == 'TRIAGED' %} aria-current="step"{% endif %}>
+                                            {% if inc.status in 'TRIAGED,UNASSIGNED,ASSIGNED,ACCEPTED,RESPONDING,RESOLVED' %}<i class="fa-solid fa-circle-check me-1" aria-hidden="true"></i>{% else %}<i class="fa-regular fa-circle me-1" aria-hidden="true"></i>{% endif %} 2. Triaged
+                                        </span>
+                                        <i class="fa-solid fa-angle-right text-muted step-separator" aria-hidden="true"></i>
+                                        <span class="incident-progress-step{% if inc.status in 'ASSIGNED,ACCEPTED,RESPONDING,RESOLVED' %} is-complete{% endif %}"{% if inc.status in 'ASSIGNED,ACCEPTED' %} aria-current="step"{% endif %}>
+                                            {% if inc.status in 'ASSIGNED,ACCEPTED,RESPONDING,RESOLVED' %}<i class="fa-solid fa-circle-check me-1" aria-hidden="true"></i>{% else %}<i class="fa-regular fa-circle me-1" aria-hidden="true"></i>{% endif %} 3. Dispatched
+                                        </span>
+                                        <i class="fa-solid fa-angle-right text-muted step-separator" aria-hidden="true"></i>
+                                        <span class="incident-progress-step{% if inc.status in 'RESPONDING,RESOLVED' %} is-complete{% endif %}"{% if inc.status == 'RESPONDING' %} aria-current="step"{% endif %}>
+                                            {% if inc.status in 'RESPONDING,RESOLVED' %}<i class="fa-solid fa-circle-check me-1" aria-hidden="true"></i>{% else %}<i class="fa-regular fa-circle me-1" aria-hidden="true"></i>{% endif %} 4. On Scene
+                                        </span>
+                                        <i class="fa-solid fa-angle-right text-muted step-separator" aria-hidden="true"></i>
+                                        <span class="incident-progress-step{% if inc.status == 'RESOLVED' %} is-complete is-current{% endif %}"{% if inc.status == 'RESOLVED' %} aria-current="step"{% endif %}>
+                                            {% if inc.status == 'RESOLVED' %}<i class="fa-solid fa-flag-checkered me-1" aria-hidden="true"></i>{% else %}<i class="fa-regular fa-circle me-1" aria-hidden="true"></i>{% endif %} 5. Resolved
+                                        </span>
+                                    </div>
+
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center mt-2 gap-2">
+                                        <small class="text-muted">
+                                            Reported {{ inc.created_at|timesince }} ago
+                                            {% if inc.assigned_responder %}
+                                                &bull; Unit: <strong class="text-primary">{{ inc.assigned_responder.get_full_name|default:inc.assigned_responder.username }}</strong>
+                                            {% endif %}
+                                        </small>
+                                        <div class="d-flex gap-2">
+                                            {% if inc.status not in 'RESOLVED,CANCELLED' %}
+                                                <a href="{% url 'incident_detail' inc.incident_id %}" class="btn btn-outline-info btn-sm text-dark">
+                                                    <i class="fa-solid fa-pen-to-square me-1"></i> Add Note
+                                                </a>
+                                            {% endif %}
+                                            <a href="{% url 'incident_detail' inc.incident_id %}" class="btn btn-outline-primary btn-sm">
+                                                Track Progress &rarr;
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="p-5 text-center text-muted">
+                            <i class="fa-solid fa-shield-cat fs-1 text-secondary mb-3"></i>
+                            <p class="mb-3">You have not submitted any emergency SOS reports.</p>
+                            <a href="{% url 'incident_create' %}" class="btn btn-danger btn-sm">
+                                <i class="fa-solid fa-bell me-1"></i> Report an Emergency
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Evacuation Shelters Directory Column -->
+        <div class="col-lg-4">
+            <div class="card card-resq mb-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h6 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-tents text-success me-2"></i> Safe Evacuation Shelters</h6>
+                    <a href="{% url 'shelter_list' %}" class="small text-decoration-none">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for s in open_shelters %}
+                            <div class="list-group-item p-3">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <h6 class="fw-bold mb-1">{{ s.name }}</h6>
+                                    <span class="badge bg-success">Open</span>
+                                </div>
+                                <p class="small text-muted mb-2"><i class="fa-solid fa-location-dot me-1"></i> {{ s.address }}</p>
+
+                                <div class="d-flex justify-content-between small text-muted mb-1">
+                                    <span>Free Capacity:</span>
+                                    <strong>{{ s.available_capacity }} / {{ s.total_capacity }}</strong>
+                                </div>
+                                <div class="progress mb-2" style="height: 6px;">
+                                    <div class="progress-bar bg-success" style="width: {{ s.occupancy_percentage }}%;"></div>
+                                </div>
+
+                                <div class="d-flex gap-2 small text-secondary">
+                                    {% if s.has_food %}<span title="Food available"><i class="fa-solid fa-bowl-rice text-success"></i> Food</span>{% endif %}
+                                    {% if s.has_water %}<span title="Water available"><i class="fa-solid fa-bottle-water text-primary"></i> Water</span>{% endif %}
+                                    {% if s.has_medical %}<span title="Medical support available"><i class="fa-solid fa-notes-medical text-danger"></i> Medical</span>{% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Emergency Preparedness Tips -->
+            <div class="p-3 bg-light rounded border">
+                <h6 class="fw-bold text-navy mb-2"><i class="fa-solid fa-circle-info text-info me-1"></i> Emergency Guidance</h6>
+                <ul class="small text-muted mb-0 ps-3">
+                    <li class="mb-1">Stay in a structurally safe, elevated location during floods.</li>
+                    <li class="mb-1">Keep your emergency phone line clear for incoming responder calls.</li>
+                    <li class="mb-1">Do not attempt to walk or drive through moving flood waters.</li>
+                    <li>For official medical or police response in Bangladesh, dial <strong>999</strong>.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const statusElement = document.getElementById('incident-status-refresh');
+    let lastSnapshot = '';
+
+    async function refreshIncidentStatuses() {
+        try {
+            const response = await fetch('{% url "api_my_incident_status" %}', {
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store'
+            });
+            if (!response.ok) throw new Error('Status refresh returned HTTP ' + response.status);
+            const data = await response.json();
+            const snapshot = JSON.stringify(data.incidents);
+            if (snapshot !== lastSnapshot) {
+                if (lastSnapshot) {
+                    statusElement.textContent = 'Incident status updated at ' + new Date().toLocaleTimeString();
+                    window.location.reload();
+                    return;
+                }
+                lastSnapshot = snapshot;
+                statusElement.textContent = 'Live status synchronized.';
+            }
+        } catch (error) {
+            statusElement.textContent = 'Live status refresh temporarily unavailable.';
+        }
+    }
+
+    refreshIncidentStatuses();
+    window.setInterval(refreshIncidentStatuses, 30000);
+});
+</script>
+{% endblock %}

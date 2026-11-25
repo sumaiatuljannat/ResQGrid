@@ -1,0 +1,540 @@
+{% extends 'base.html' %}
+{% load resqgrid_tags %}
+
+{% block title %}Admin Command Center - ResQGrid{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <!-- Page Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-2 border-bottom">
+        <div>
+            <h1 class="h2 fw-bold text-navy mb-1"><i class="fa-solid fa-sliders text-danger me-2"></i> Admin Command Center</h1>
+            <p class="text-muted mb-0">System-wide emergency monitoring, dispatch oversight, responder verification, and resource telemetry</p>
+        </div>
+        <div class="d-flex gap-2 mt-2 mt-sm-0">
+            <a href="{% url 'map_view' %}" class="btn btn-outline-primary btn-sm">
+                <i class="fa-solid fa-map-location-dot me-1"></i> Live Grid Map
+            </a>
+            <a href="{% url 'shelter_allocate' %}" class="btn btn-outline-success btn-sm">
+                <i class="fa-solid fa-tents me-1"></i> Allocate Shelter
+            </a>
+            <a href="{% url 'resource_list' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-boxes-stacked me-1"></i> Relief Resources
+            </a>
+            <a href="{% url 'incident_create' %}" class="btn btn-danger btn-sm fw-bold">
+                <i class="fa-solid fa-bell me-1"></i> Dispatch SOS
+            </a>
+        </div>
+    </div>
+
+    <!-- KPI Metric Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg">
+            <div class="stat-card">
+                <div class="stat-label">Total Incidents</div>
+                <div class="stat-value">{{ total_incidents }}</div>
+                <small class="text-muted">All-time recorded</small>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-lg">
+            <div class="stat-card stat-critical">
+                <div class="stat-label">Critical Emergencies</div>
+                <div class="stat-value">{{ critical_incidents }}</div>
+                <small class="text-danger fw-semibold">Immediate triage required</small>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-lg">
+            <div class="stat-card stat-unassigned">
+                <div class="stat-label">Unassigned Incidents</div>
+                <div class="stat-value">{{ unassigned_incidents }}</div>
+                <small class="text-warning fw-semibold">Requires manual or reassignment</small>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-lg">
+            <div class="stat-card stat-responders">
+                <div class="stat-label">Active Responders</div>
+                <div class="stat-value">{{ active_responders }}</div>
+                <small class="text-primary">Verified & available</small>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-lg">
+            <div class="stat-card stat-shelters">
+                <div class="stat-label">Open Shelters</div>
+                <div class="stat-value">{{ available_shelters }}</div>
+                <small class="text-success">Accepting evacuees</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Charts & Activity Stream -->
+    <div class="row g-4 mb-4">
+        <!-- Priority & Status Charts -->
+        <div class="col-lg-7">
+            <div class="card card-resq h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span class="fw-bold"><i class="fa-solid fa-chart-pie me-2 text-primary"></i> Incident Analytics & Triage Distribution</span>
+                    <span class="badge bg-light text-dark border">Live Database Metrics</span>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6 mb-3 mb-md-0 text-center">
+                            <h6 class="small text-muted fw-bold text-uppercase mb-2">Priority Breakdown (A02)</h6>
+                            <div class="chart-frame">
+                                <canvas id="priorityChart" role="img" aria-label="Incident count by priority: critical, high, medium, and low"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-center">
+                            <h6 class="small text-muted fw-bold text-uppercase mb-2">Workflow Status (A07)</h6>
+                            <div class="chart-frame">
+                                <canvas id="statusChart" role="img" aria-label="Incident count by workflow status"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Audit Events Stream -->
+        <div class="col-lg-5">
+            <div class="card card-resq h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span class="fw-bold"><i class="fa-solid fa-clock-rotate-left me-2 text-danger"></i> Incident Audit Trail (Module D)</span>
+                    <span class="badge bg-danger">Live Log</span>
+                </div>
+                <div class="card-body p-3 overflow-auto" style="max-height: 280px;">
+                    {% if recent_events %}
+                        <div class="incident-timeline">
+                            {% for ev in recent_events %}
+                                <div class="timeline-item {% if 'CRITICAL' in ev.description %}item-critical{% elif ev.event_type == 'RESOLVED' %}item-resolved{% endif %}">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <a href="{% url 'incident_detail' ev.incident.incident_id %}" class="fw-bold text-decoration-none small">
+                                            {{ ev.incident.incident_id }}
+                                        </a>
+                                        <span class="text-muted" style="font-size: 0.72rem;">{{ ev.timestamp|timesince }} ago</span>
+                                    </div>
+                                    <div class="small fw-semibold text-dark">{{ ev.get_event_type_display }}</div>
+                                    <p class="small text-muted mb-0">{{ ev.description|truncatechars:100 }}</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted small text-center my-4">No audit events recorded yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Responder Verifications (Module C Requirement) -->
+    {% if pending_responders %}
+        <div class="card card-resq border-warning mb-4">
+            <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-dark"><i class="fa-solid fa-user-check text-warning me-2"></i> Responders Awaiting Admin Verification ({{ pending_responders.count }})</span>
+                <span class="badge bg-warning text-dark">Action Required</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-resq table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Responder</th>
+                                <th>Organization</th>
+                                <th>Contact</th>
+                                <th>Skills</th>
+                                <th>Equipment</th>
+                                <th>Base Area</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for resp in pending_responders %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ resp.user.get_full_name|default:resp.user.username }}</strong>
+                                        <div class="small text-muted">@{{ resp.user.username }}</div>
+                                    </td>
+                                    <td>{{ resp.user.profile.organization|default:"Independent Volunteer" }}</td>
+                                    <td>{{ resp.user.profile.phone }}</td>
+                                    <td>
+                                        {% for s in resp.get_skills_list %}
+                                            <span class="badge bg-light text-dark border">{{ s }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% for eq in resp.get_equipment_list %}
+                                            <span class="badge bg-light text-primary border">{{ eq }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ resp.service_area_name }}</td>
+                                    <td class="text-end">
+                                        <form method="post" action="{% url 'admin_verify_responder' resp.id %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="VERIFY">
+                                            <button type="submit" class="btn btn-success btn-sm"><i class="fa-solid fa-check me-1"></i> Verify</button>
+                                        </form>
+                                        <form method="post" action="{% url 'admin_verify_responder' resp.id %}" class="d-inline ms-1">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="REJECT">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-xmark me-1"></i> Reject</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Incident Management Table with Search, Filter & Sort -->
+    <div class="card card-resq mb-4">
+        <div class="card-header bg-white py-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+                        <input type="text" name="q" class="form-control" aria-label="Search incidents by ID, location, or contact" placeholder="Search ID, location, contact..." value="{{ q_search }}">
+                    </div>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="status" class="form-select form-select-sm" aria-label="Filter by incident status">
+                        <option value="">All Statuses</option>
+                        {% for st_val, st_lbl in incident_statuses %}
+                            <option value="{{ st_val }}" {% if f_status == st_val %}selected{% endif %}>{{ st_lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="priority" class="form-select form-select-sm" aria-label="Filter by priority">
+                        <option value="">All Priorities</option>
+                        {% for pr_val, pr_lbl in priority_levels %}
+                            <option value="{{ pr_val }}" {% if f_priority == pr_val %}selected{% endif %}>{{ pr_lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="type" class="form-select form-select-sm" aria-label="Filter by emergency type">
+                        <option value="">All Types</option>
+                        {% for ty_val, ty_lbl in emergency_types %}
+                            <option value="{{ ty_val }}" {% if f_type == ty_val %}selected{% endif %}>{{ ty_lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-sm-6 col-md-2">
+                    <select name="sort" class="form-select form-select-sm" aria-label="Sort incidents">
+                        <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Newest First</option>
+                        <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Oldest (Longest Wait)</option>
+                        <option value="-priority_score" {% if sort_by == '-priority_score' %}selected{% endif %}>Highest Priority Score</option>
+                    </select>
+                </div>
+
+                <div class="col-md-1 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">Filter</button>
+                    {% if q_search or f_status or f_priority or f_type %}
+                        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary btn-sm" title="Clear Filters" aria-label="Clear incident filters"><i class="fa-solid fa-rotate-left"></i></a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-resq table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Incident ID</th>
+                            <th>Priority (A02)</th>
+                            <th>Emergency Type</th>
+                            <th>Location</th>
+                            <th>Casualties / Affected</th>
+                            <th>Status (A07)</th>
+                            <th>Assigned Responder</th>
+                            <th>Wait Time</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if incidents %}
+                            {% for inc in incidents %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'incident_detail' inc.incident_id %}" class="fw-bold text-decoration-none">
+                                            {{ inc.incident_id }}
+                                        </a>
+                                        <div class="small text-muted">{{ inc.created_at|date:"M d, H:i" }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ inc.priority_level|priority_badge_class }} px-2 py-1">
+                                            {{ inc.priority_level }} ({{ inc.priority_score }})
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold">{{ inc.get_emergency_type_display }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="small">{{ inc.location_name }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="fa-solid fa-users text-secondary me-1"></i> {{ inc.affected_count }}
+                                        </span>
+                                        {% if inc.injured_count > 0 %}
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                                <i class="fa-solid fa-user-injured me-1"></i> {{ inc.injured_count }}
+                                            </span>
+                                        {% endif %}
+                                        {% if inc.trapped_count > 0 %}
+                                            <span class="badge bg-dark text-white">
+                                                <i class="fa-solid fa-handcuffs me-1"></i> {{ inc.trapped_count }} trapped
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ inc.status|status_badge_class }}">
+                                            {{ inc.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if inc.assigned_responder %}
+                                            <span class="small fw-semibold text-primary">
+                                                <i class="fa-solid fa-user-shield me-1"></i> {{ inc.assigned_responder.get_full_name|default:inc.assigned_responder.username }}
+                                            </span>
+                                        {% elif inc.status == 'UNASSIGNED' %}
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Needs Dispatch</span>
+                                        {% else %}
+                                            <span class="text-muted small">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ inc.waiting_time_minutes }}m</small>
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'incident_detail' inc.incident_id %}" class="btn btn-outline-primary btn-sm">
+                                            <i class="fa-solid fa-eye me-1"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="text-center py-4 text-muted">
+                                    No emergency incidents match the selected filter criteria.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Emergency Responders Management Roster (Module C) -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-7">
+            <div class="card card-resq h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-navy"><i class="fa-solid fa-truck-medical text-primary me-2"></i> Verified Emergency Responders Roster (Module C)</span>
+                    <span class="badge bg-primary">{{ all_responders.count }} Enrolled</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-resq table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Responder Unit</th>
+                                    <th>Duty Status</th>
+                                    <th>Active Missions</th>
+                                    <th>Equipment & Skills</th>
+                                    <th>Base & Coverage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for resp in all_responders %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ resp.user.get_full_name|default:resp.user.username }}</strong>
+                                            <div class="small text-muted">{{ resp.user.profile.organization|default:"Independent Unit" }}</div>
+                                            <div class="small text-muted"><i class="fa-solid fa-phone me-1"></i>{{ resp.user.profile.phone }}</div>
+                                        </td>
+                                        <td>
+                                            {% if resp.availability == 'AVAILABLE' %}
+                                                <span class="badge bg-success bg-opacity-10 text-success border border-success">Available</span>
+                                            {% elif resp.availability == 'BUSY' %}
+                                                <span class="badge bg-warning bg-opacity-10 text-warning border border-warning">Busy</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Offline</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-navy">{{ resp.current_active_assignments }} / {{ resp.max_active_capacity }}</span>
+                                            <div class="progress mt-1" style="height: 4px; width: 60px;">
+                                                <div class="progress-bar {% if resp.current_active_assignments >= resp.max_active_capacity %}bg-danger{% else %}bg-primary{% endif %}" style="width: {% widthratio resp.current_active_assignments resp.max_active_capacity 100 %}%;"></div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for eq in resp.get_equipment_list %}
+                                                    <span class="badge bg-light text-primary border" style="font-size: 0.7rem;">{{ eq }}</span>
+                                                {% endfor %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="small">{{ resp.service_area_name }}</span>
+                                            <div class="small text-muted">{{ resp.service_radius_km }}km radius</div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Evacuation Shelters Capacity Telemetry (Module E) -->
+        <div class="col-lg-5">
+            <div class="card card-resq h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-navy"><i class="fa-solid fa-tents text-success me-2"></i> Shelter Capacity Monitor (Module E)</span>
+                    <a href="{% url 'shelter_list' %}" class="small text-decoration-none">Manage All &rarr;</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for s in all_shelters %}
+                            <div class="list-group-item p-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong class="text-navy small">{{ s.name }}</strong>
+                                    <span class="badge {{ s.status|shelter_status_badge }}">{{ s.status }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between small text-muted mb-1">
+                                    <span>Occupancy:</span>
+                                    <strong>{{ s.occupied_capacity }} / {{ s.total_capacity }} ({{ s.occupancy_percentage }}%)</strong>
+                                </div>
+                                <div class="progress mb-2" style="height: 6px;">
+                                    <div class="progress-bar {% if s.occupancy_percentage > 90 %}bg-danger{% elif s.occupancy_percentage > 70 %}bg-warning{% else %}bg-success{% endif %}" style="width: {{ s.occupancy_percentage }}%;"></div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center small">
+                                    <span class="{% if s.available_capacity > 0 %}text-success fw-bold{% else %}text-danger fw-bold{% endif %}">
+                                        {{ s.available_capacity }} spot(s) remaining
+                                    </span>
+                                    <a href="{% url 'shelter_allocate' %}?shelter_id={{ s.id }}" class="btn btn-outline-success btn-sm py-0" style="font-size: 0.72rem;">
+                                        Allocate Evacuees
+                                    </a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let priorityChartInstance;
+let statusChartInstance;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Priority Chart
+    const pCtx = document.getElementById('priorityChart').getContext('2d');
+    priorityChartInstance = new Chart(pCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Critical', 'High', 'Medium', 'Low'],
+            datasets: [{
+                data: [
+                    {{ priority_counts.CRITICAL }},
+                    {{ priority_counts.HIGH }},
+                    {{ priority_counts.MEDIUM }},
+                    {{ priority_counts.LOW }}
+                ],
+                backgroundColor: ['#b42332', '#c65a19', '#e6b338', '#25835f'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12 } }
+            }
+        }
+    });
+
+    // Status Chart
+    const sCtx = document.getElementById('statusChart').getContext('2d');
+    statusChartInstance = new Chart(sCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Reported', 'Assigned', 'Accepted', 'Responding', 'Resolved', 'Unassigned'],
+            datasets: [{
+                label: 'Incidents',
+                data: [
+                    {{ status_counts.REPORTED }},
+                    {{ status_counts.ASSIGNED }},
+                    {{ status_counts.ACCEPTED }},
+                    {{ status_counts.RESPONDING }},
+                    {{ status_counts.RESOLVED }},
+                    {{ status_counts.UNASSIGNED }}
+                ],
+                backgroundColor: ['#64748b', '#2563eb', '#f59e0b', '#0284c7', '#16a34a', '#dc2626']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
+            }
+        }
+    });
+
+    // Auto-poll stats every 30 seconds
+    setInterval(refreshStats, 30000);
+});
+
+function refreshStats() {
+    fetch('/api/stats/')
+        .then(res => res.json())
+        .then(data => {
+            if (priorityChartInstance && data.priorities) {
+                priorityChartInstance.data.datasets[0].data = [
+                    data.priorities.CRITICAL || 0,
+                    data.priorities.HIGH || 0,
+                    data.priorities.MEDIUM || 0,
+                    data.priorities.LOW || 0
+                ];
+                priorityChartInstance.update();
+            }
+            if (statusChartInstance && data.statuses) {
+                statusChartInstance.data.datasets[0].data = [
+                    data.statuses.REPORTED || 0,
+                    data.statuses.ASSIGNED || 0,
+                    data.statuses.ACCEPTED || 0,
+                    data.statuses.RESPONDING || 0,
+                    data.statuses.RESOLVED || 0,
+                    data.statuses.UNASSIGNED || 0
+                ];
+                statusChartInstance.update();
+            }
+        })
+        .catch(err => console.log('Stats poll error:', err));
+}
+</script>
+{% endblock %}

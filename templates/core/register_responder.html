@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block title %}Responder Registration - ResQGrid{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card card-resq shadow-sm">
+                <div class="card-header bg-dark text-white py-3">
+                    <h1 class="h4 mb-0 fw-bold"><i class="fa-solid fa-kit-medical text-primary me-2"></i> Emergency Responder Registration</h1>
+                    <small class="text-secondary">Register as a certified volunteer or agency responder. Admin verification required prior to dispatch.</small>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post">
+                        {% csrf_token %}
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                        {% endif %}
+
+                        <h5 class="fw-bold text-primary mb-3"><i class="fa-solid fa-user me-2"></i> Basic Information</h5>
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <label for="{{ form.first_name.id_for_label }}" class="form-label fw-semibold">First Name</label>
+                                {{ form.first_name }}
+                            </div>
+                            <div class="col-sm-6">
+                                <label for="{{ form.last_name.id_for_label }}" class="form-label fw-semibold">Last Name</label>
+                                {{ form.last_name }}
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <label for="{{ form.username.id_for_label }}" class="form-label fw-semibold">Username <span class="required-indicator">(required)</span></label>
+                                {{ form.username }}
+                                {{ form.username.errors }}
+                            </div>
+                            <div class="col-sm-6">
+                                <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold">Email Address</label>
+                                {{ form.email }}
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <label for="{{ form.phone.id_for_label }}" class="form-label fw-semibold">Contact Phone Number <span class="required-indicator">(required)</span></label>
+                                {{ form.phone }}
+                                {{ form.phone.errors }}
+                            </div>
+                            <div class="col-sm-6">
+                                <label for="{{ form.organization.id_for_label }}" class="form-label fw-semibold">Organization / Volunteer Agency <span class="required-indicator">(required)</span></label>
+                                {{ form.organization }}
+                                {{ form.organization.errors }}
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-sm-6">
+                                <label for="{{ form.password.id_for_label }}" class="form-label fw-semibold">Password <span class="required-indicator">(required)</span></label>
+                                {{ form.password }}
+                                {{ form.password.errors }}
+                            </div>
+                            <div class="col-sm-6">
+                                <label for="{{ form.confirm_password.id_for_label }}" class="form-label fw-semibold">Confirm Password <span class="required-indicator">(required)</span></label>
+                                {{ form.confirm_password }}
+                                {{ form.confirm_password.errors }}
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h5 class="fw-bold text-primary mb-3"><i class="fa-solid fa-certificate me-2"></i> Operational Capabilities</h5>
+                        <div class="mb-3">
+                            <fieldset class="mb-0">
+                                <legend class="form-label fw-semibold">{{ form.skills_selected.label }} <span class="required-indicator">(required)</span></legend>
+                            <div class="p-3 bg-light rounded border">
+                                <div class="row">
+                                    {% for choice in form.skills_selected %}
+                                        <div class="col-md-6 mb-2">
+                                            <div class="form-check">
+                                                {{ choice.tag }}
+                                                <label class="form-check-label small" for="{{ choice.id_for_label }}">
+                                                    {{ choice.choice_label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            </fieldset>
+                            {{ form.skills_selected.errors }}
+                        </div>
+
+                        <div class="mb-4">
+                            <fieldset class="mb-0">
+                                <legend class="form-label fw-semibold">{{ form.equipment_selected.label }} <span class="required-indicator">(required)</span></legend>
+                            <div class="p-3 bg-light rounded border">
+                                <div class="row">
+                                    {% for choice in form.equipment_selected %}
+                                        <div class="col-md-6 mb-2">
+                                            <div class="form-check">
+                                                {{ choice.tag }}
+                                                <label class="form-check-label small" for="{{ choice.id_for_label }}">
+                                                    {{ choice.choice_label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            </fieldset>
+                            {{ form.equipment_selected.errors }}
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h5 class="fw-bold text-primary mb-3"><i class="fa-solid fa-location-crosshairs me-2"></i> Deployment Base & Coverage</h5>
+                        <div class="mb-3">
+                            <label for="{{ form.service_area_name.id_for_label }}" class="form-label fw-semibold">Service Area Name <span class="required-indicator">(required)</span></label>
+                            {{ form.service_area_name }}
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-4">
+                                <label for="{{ form.latitude.id_for_label }}" class="form-label fw-semibold">Base Latitude <span class="required-indicator">(required)</span></label>
+                                {{ form.latitude }}
+                            </div>
+                            <div class="col-sm-4">
+                                <label for="{{ form.longitude.id_for_label }}" class="form-label fw-semibold">Base Longitude <span class="required-indicator">(required)</span></label>
+                                {{ form.longitude }}
+                            </div>
+                            <div class="col-sm-4">
+                                <label for="{{ form.service_radius_km.id_for_label }}" class="form-label fw-semibold">Coverage Radius (km) <span class="required-indicator">(required)</span></label>
+                                {{ form.service_radius_km }}
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBase(23.8103, 90.4125, 'Dhaka Central')">Set Dhaka</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBase(22.3569, 91.7832, 'Chittagong Port')">Set Chittagong</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setBase(24.8949, 91.8687, 'Sylhet Sadar')">Set Sylhet</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm ms-auto" onclick="detectGPS()"><i class="fa-solid fa-crosshairs me-1"></i> Detect My GPS</button>
+                        </div>
+                        <div id="gps-feedback" class="small mb-3" role="status" aria-live="polite"></div>
+
+                        <div class="mb-4">
+                            <label for="{{ form.max_active_capacity.id_for_label }}" class="form-label fw-semibold">Max Concurrent Incident Capacity <span class="required-indicator">(required)</span></label>
+                            {{ form.max_active_capacity }}
+                            <small class="text-muted">Maximum simultaneous emergency missions your team can handle before being marked busy.</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary fw-bold w-100 py-2">
+                            <i class="fa-solid fa-paper-plane me-2"></i> Register Responder Profile
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setBase(lat, lon, name) {
+    document.getElementById('id_latitude').value = lat;
+    document.getElementById('id_longitude').value = lon;
+    const areaName = document.getElementById('id_service_area_name');
+    if (areaName && !areaName.value) {
+        areaName.value = name;
+    }
+    document.getElementById('gps-feedback').textContent = name + ' coordinates selected.';
+}
+function detectGPS() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            document.getElementById('id_latitude').value = pos.coords.latitude.toFixed(6);
+            document.getElementById('id_longitude').value = pos.coords.longitude.toFixed(6);
+            document.getElementById('gps-feedback').textContent = 'Current location coordinates selected.';
+        }, function(err) {
+            document.getElementById('gps-feedback').textContent = "Could not retrieve GPS coordinates: " + err.message;
+        });
+    } else {
+        document.getElementById('gps-feedback').textContent = "Geolocation is not supported by your browser.";
+    }
+}
+</script>
+{% endblock %}

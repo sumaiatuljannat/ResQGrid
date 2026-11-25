@@ -1,0 +1,429 @@
+{% extends 'base.html' %}
+{% load resqgrid_tags %}
+
+{% block title %}Incident {{ incident.incident_id }} - ResQGrid Mission Control{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Incident Header Bar -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div class="incident-header-main">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h1 class="h3 fw-bold text-navy mb-0">{{ incident.incident_id }}</h1>
+                <span class="badge {{ incident.priority_level|priority_badge_class }} fs-6 px-3 py-1">
+                    {{ incident.priority_level }} ({{ incident.priority_score }} pts)
+                </span>
+                <span class="badge {{ incident.status|status_badge_class }} fs-6 px-3 py-1">
+                    {{ incident.get_status_display }}
+                </span>
+            </div>
+            <p class="text-muted mb-0 incident-header-meta">
+                <i class="fa-solid fa-clock me-1"></i> Reported {{ incident.created_at|date:"M d, Y H:i" }} ({{ incident.waiting_time_minutes }}m elapsed) &bull;
+                <i class="fa-solid fa-tag me-1 ms-2"></i> {{ incident.get_emergency_type_display }} &bull;
+                <i class="fa-solid fa-location-dot text-danger me-1 ms-2"></i> {{ incident.location_name }}
+            </p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-3 mt-md-0 align-items-center">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                <i class="fa-solid fa-print me-1"></i> Print Ticket
+            </button>
+            <a href="{% url 'map_view' %}?focus={{ incident.incident_id }}" class="btn btn-outline-primary btn-sm">
+                <i class="fa-solid fa-map-pin me-1"></i> View on Live Map
+            </a>
+            {% if can_allocate_shelter_for_incident %}
+                {% if incident.status not in 'RESOLVED,CANCELLED' %}
+                    <a href="{% url 'shelter_allocate' %}?incident_id={{ incident.incident_id }}" class="btn btn-outline-success btn-sm">
+                        <i class="fa-solid fa-person-shelter me-1"></i> Evacuate to Shelter
+                    </a>
+                {% endif %}
+            {% endif %}
+            {% if is_admin and incident.status not in 'RESOLVED,CANCELLED' %}
+                <form method="post" action="{% url 'incident_retrigger_triage' incident.incident_id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-warning btn-sm fw-semibold" title="Re-evaluate priority and dispatch rules">
+                        <i class="fa-solid fa-rotate me-1"></i> Re-Triage
+                    </button>
+                </form>
+            {% endif %}
+            {% if can_resolve and not is_assigned %}
+                <button type="button" class="btn btn-success btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#resolveModal">
+                    <i class="fa-solid fa-flag-checkered me-1"></i> Admin Resolve
+                </button>
+            {% endif %}
+            {% if is_admin or is_owner %}
+                {% if incident.status != 'RESOLVED' and incident.status != 'CANCELLED' %}
+                    <form method="post" action="{% url 'incident_update_status' incident.incident_id %}" onsubmit="return confirm('Cancel this emergency incident report?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="CANCELLED">
+                        <input type="hidden" name="notes" value="Cancelled by authorized user.">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="fa-solid fa-ban me-1"></i> Cancel
+                        </button>
+                    </form>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Active Mission Actions for Responder -->
+    {% if is_assigned and active_assignment %}
+        <div class="alert alert-primary shadow-sm mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center">
+                <div>
+                    <h5 class="fw-bold mb-1"><i class="fa-solid fa-user-shield me-2"></i> You are the Assigned Emergency Responder</h5>
+                    <p class="mb-0 small">Assignment Status: <strong>{{ active_assignment.get_status_display }}</strong></p>
+                </div>
+                <div class="d-flex gap-2 mt-2 mt-md-0">
+                    {% if active_assignment.status == 'PENDING' %}
+                        <form method="post" action="{% url 'assignment_accept' active_assignment.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success btn-sm fw-bold"><i class="fa-solid fa-check me-1"></i> Accept Mission</button>
+                        </form>
+                        <form method="post" action="{% url 'assignment_reject' active_assignment.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="rejection_reason" value="Declined from detail page.">
+                            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-xmark me-1"></i> Decline</button>
+                        </form>
+                    {% elif incident.status == 'ACCEPTED' %}
+                        <form method="post" action="{% url 'incident_update_status' incident.incident_id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="RESPONDING">
+                            <button type="submit" class="btn btn-primary btn-sm fw-bold"><i class="fa-solid fa-route me-1"></i> Mark Responding / En Route</button>
+                        </form>
+                    {% elif incident.status == 'RESPONDING' %}
+                        <button type="button" class="btn btn-success btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#resolveModal">
+                            <i class="fa-solid fa-flag-checkered me-1"></i> Mark Mission Resolved
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Unassigned Alert Box (Module C & D Failover Notice) -->
+    {% if incident.status == 'UNASSIGNED' %}
+        <div class="alert alert-danger shadow-sm mb-4">
+            <div class="d-flex align-items-start">
+                <i class="fa-solid fa-triangle-exclamation fs-3 me-3 mt-1 text-danger"></i>
+                <div class="flex-grow-1">
+                    <h5 class="fw-bold mb-1">Attention: Incident Currently UNASSIGNED</h5>
+                    <p class="mb-2 small">
+                        Automated dispatch could not find an available responder meeting all mandatory requirements (skills, equipment, active capacity).
+                    </p>
+                    <div class="p-2 bg-white bg-opacity-75 rounded small font-monospace text-dark">
+                        <strong>Reason:</strong> {{ incident.unassigned_reason|default:"No verified responder online with mandatory equipment or within coverage radius." }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="row g-4">
+        <!-- Left Column: Details & Priority Engine Evaluation -->
+        <div class="col-lg-7">
+
+            <!-- Card 1: Emergency Overview -->
+            <div class="card card-resq mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-file-waveform text-primary me-2"></i> Incident Situation Overview</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="text-muted small fw-bold text-uppercase">Description & Hazard Context</label>
+                        <p class="fs-6 mb-0">{{ incident.description }}</p>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-4">
+                            <div class="p-3 bg-light rounded text-center">
+                                <span class="text-muted small d-block">Total Affected</span>
+                                <strong class="fs-4">{{ incident.affected_count }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="p-3 bg-danger bg-opacity-10 rounded text-center border border-danger">
+                                <span class="text-danger small d-block fw-semibold">Injured</span>
+                                <strong class="fs-4 text-danger">{{ incident.injured_count }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="p-3 bg-dark text-white rounded text-center">
+                                <span class="text-white-50 small d-block">Trapped</span>
+                                <strong class="fs-4">{{ incident.trapped_count }}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 small text-muted">
+                        <div class="col-sm-6">
+                            <strong>Threat to Life:</strong>
+                            {% if incident.immediate_threat_to_life %}
+                                <span class="badge bg-danger text-white">Active Immediate Threat</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark border">None Confirmed</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-sm-6">
+                            <strong>Access Difficulty:</strong>
+                            <span class="badge bg-secondary text-white">{{ incident.get_access_difficulty_display }}</span>
+                        </div>
+                        {% if incident.has_vulnerable_people %}
+                            <div class="col-12 mt-2">
+                                <span class="badge bg-warning text-dark"><i class="fa-solid fa-person-cane me-1"></i> High Vulnerability: {{ incident.vulnerable_details|default:"Infants / Elderly / Mobility Impaired" }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Module B Intelligent Priority Engine Breakdown (A02) -->
+            <div class="card card-resq mb-4 border-primary">
+                <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center py-3">
+                    <h5 class="fw-bold mb-0 text-navy">
+                        <i class="fa-solid fa-brain text-primary me-2"></i> Intelligent Priority Engine (Challenge A02)
+                    </h5>
+                    <span class="badge bg-primary">Rule-Based Score: {{ incident.priority_score }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3 p-3 bg-light rounded">
+                        <div>
+                            <span class="small text-muted text-uppercase fw-bold">Classification Tier</span>
+                            <div class="fs-4 fw-bold text-navy">{{ incident.get_priority_level_display }}</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="small text-muted text-uppercase fw-bold">Mandatory Gear</span>
+                            <div class="small fw-semibold text-primary">
+                                {% for eq in incident.get_required_equipment %}
+                                    <span class="badge bg-primary text-white">{{ eq }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="small fw-bold text-muted text-uppercase mb-2">Transparent Factor Breakdown</h6>
+                    <div class="p-3 bg-light rounded font-monospace small" style="white-space: pre-line; line-height: 1.6;">
+                        {{ incident.priority_explanation }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Location Map Pin -->
+            <div class="card card-resq mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-map-location-dot text-success me-2"></i> Coordinates & Location</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="incident-map" role="application" aria-label="Map showing the reported incident location"></div>
+                    <div class="p-3 bg-light d-flex justify-content-between align-items-center small text-muted">
+                        <span><strong>Coordinates:</strong> {{ incident.latitude }}, {{ incident.longitude }}</span>
+                        <span><strong>Location:</strong> {{ incident.location_name }}</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Responder Assignment, Audit Trail & Admin Actions -->
+        <div class="col-lg-5">
+
+            <!-- Card 4: Assigned Responder Details -->
+            <div class="card card-resq mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-user-shield text-primary me-2"></i> Responder Unit</h6>
+                    {% if incident.assigned_responder %}
+                        <span class="badge bg-success">Assigned</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Unassigned</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if incident.assigned_responder %}
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div class="p-3 bg-primary bg-opacity-10 rounded-circle text-primary fs-3">
+                                <i class="fa-solid fa-truck-medical"></i>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0">{{ incident.assigned_responder.get_full_name|default:incident.assigned_responder.username }}</h5>
+                                <small class="text-muted">{{ incident.assigned_responder.profile.organization|default:"Emergency Response Unit" }}</small>
+                            </div>
+                        </div>
+                        <ul class="list-unstyled small mb-0">
+                            <li class="mb-2"><i class="fa-solid fa-phone text-muted me-2"></i><strong>Contact:</strong> {{ incident.assigned_responder.profile.phone }}</li>
+                            {% if active_assignment %}
+                                <li class="mb-2"><i class="fa-solid fa-bullseye text-muted me-2"></i><strong>Match Score:</strong> {{ active_assignment.match_score }}/100</li>
+                                <li class="p-2 bg-light rounded text-muted mb-0">
+                                    <strong>Recommendation Rationale:</strong><br>
+                                    {{ active_assignment.match_explanation }}
+                                </li>
+                            {% endif %}
+                        </ul>
+                    {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="fa-solid fa-users-slash fs-2 text-secondary mb-2"></i>
+                            <p class="mb-0">No responder currently dispatched.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Card 5: Admin Manual Dispatch Recommendation (If unassigned or triaged) -->
+            {% if is_admin and recommended_matches %}
+                <div class="card card-resq mb-4 border-info">
+                    <div class="card-header bg-info bg-opacity-10 py-3">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-list-check text-info me-2"></i> Ranked Candidate Responders (Module C)</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            {% for match in recommended_matches %}
+                                <div class="list-group-item p-3">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <strong>{{ match.responder.get_full_name|default:match.responder.username }}</strong>
+                                        <span class="badge bg-primary">Score: {{ match.score }}</span>
+                                    </div>
+                                    <p class="small text-muted mb-2">
+                                        {{ match.explanation }}
+                                    </p>
+                                    <form method="post" action="{% url 'manual_dispatch' incident.incident_id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="responder_id" value="{{ match.responder.id }}">
+                                        <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+                                            <i class="fa-solid fa-paper-plane me-1"></i> Dispatch {{ match.responder.username }}
+                                        </button>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            <!-- Card: Linked Evacuation Accommodations -->
+            {% if shelter_allocations %}
+                <div class="card card-resq mb-4 border-success">
+                    <div class="card-header bg-success bg-opacity-10 py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0 text-success"><i class="fa-solid fa-person-shelter me-2"></i> Evacuees Safely Sheltered ({{ shelter_allocations.count }})</h6>
+                        <span class="badge bg-success">Accommodated</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            {% for alloc in shelter_allocations %}
+                                <div class="list-group-item p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong class="text-navy">{{ alloc.person_name }} ({{ alloc.family_count }} persons)</strong>
+                                        <span class="badge bg-light text-dark border"><i class="fa-solid fa-tents text-success me-1"></i> {{ alloc.shelter.name }}</span>
+                                    </div>
+                                    <small class="text-muted d-block">Allocated {{ alloc.allocated_at|timesince }} ago &bull; Contact: {{ alloc.contact_phone|default:"N/A" }}</small>
+                                    {% if alloc.notes %}<div class="small text-secondary mt-1">Special notes: {{ alloc.notes }}</div>{% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Card: Post Operational Update / Note -->
+            {% if can_post_note %}
+                <div class="card card-resq mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h6 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-message text-primary me-2"></i> Post Operational Field Update</h6>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'incident_post_note' incident.incident_id %}">
+                            {% csrf_token %}
+                            <div class="mb-2">
+                                <label for="{{ note_form.note.id_for_label }}" class="form-label fw-semibold">{{ note_form.note.label }} <span class="required-indicator">(required)</span></label>
+                                {{ note_form.note }}
+                                {{ note_form.note.errors }}
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+                                <i class="fa-solid fa-paper-plane me-1"></i> Post Update to Incident Log
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Card 6: Audit Trail & Event Timeline (Module D) -->
+            <div class="card card-resq mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-timeline text-danger me-2"></i> Multi-Step Workflow Event Log (A07)</h6>
+                    <span class="badge bg-light text-dark border">{{ events.count }} Event(s)</span>
+                </div>
+                <div class="card-body p-3 overflow-auto" style="max-height: 400px;">
+                    <div class="incident-timeline">
+                        {% for ev in events %}
+                            <div class="timeline-item {% if ev.event_type == 'RESOLVED' %}item-resolved{% elif 'CRITICAL' in ev.description %}item-critical{% endif %}">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <strong class="small text-navy">{{ ev.get_event_type_display }}</strong>
+                                    <small class="text-muted" style="font-size: 0.72rem;">{{ ev.timestamp|date:"H:i:s" }}</small>
+                                </div>
+                                <div class="small text-secondary mb-1">
+                                    By: <strong>{{ ev.actor.username|default:"System Engine" }}</strong>
+                                    {% if ev.from_status and ev.to_status %}
+                                        ({{ ev.from_status }} &rarr; {{ ev.to_status }})
+                                    {% endif %}
+                                </div>
+                                <p class="small text-muted mb-0">{{ ev.description }}</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<!-- Resolve Modal (For Responder or Admin) -->
+<div class="modal fade" id="resolveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'incident_update_status' incident.incident_id %}">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="RESOLVED">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="fa-solid fa-circle-check me-2"></i> Complete & Resolve Incident</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="final-resolution-notes" class="form-label fw-semibold">Final Mission Resolution Summary <span class="required-indicator">(required)</span></label>
+                        <textarea id="final-resolution-notes" name="notes" class="form-control" rows="3" required placeholder="Describe outcome, victims assisted, shelters utilized, or any casualty handover details."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-success">Confirm Resolution</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const lat = {{ incident.latitude }};
+    const lon = {{ incident.longitude }};
+    const incidentId = "{{ incident.incident_id|escapejs }}";
+    const locationName = "{{ incident.location_name|escapejs }}";
+    const map = L.map('incident-map').setView([lat, lon], 13);
+    ResQGridMaps.addBasemaps(map);
+    ResQGridMaps.watchResize(map);
+
+    const popup = document.createElement('div');
+    const id = document.createElement('strong');
+    id.textContent = incidentId;
+    const location = document.createElement('div');
+    location.textContent = locationName;
+    popup.append(id, location);
+
+    L.marker([lat, lon]).addTo(map)
+        .bindPopup(popup)
+        .openPopup();
+});
+</script>
+{% endblock %}

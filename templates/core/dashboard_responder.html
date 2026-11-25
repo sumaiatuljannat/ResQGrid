@@ -1,0 +1,349 @@
+{% extends 'base.html' %}
+{% load resqgrid_tags %}
+
+{% block title %}Responder Mission Terminal - ResQGrid{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Responder Profile & Status Header -->
+    <div class="card card-resq mb-4 shadow-sm">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-7">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <h1 class="h3 fw-bold text-navy mb-0">{{ user.get_full_name|default:user.username }}</h1>
+                        {% if responder_profile.verification_status == 'VERIFIED' %}
+                            <span class="badge bg-success"><i class="fa-solid fa-check-circle me-1"></i> Verified Responder</span>
+                        {% elif responder_profile.verification_status == 'PENDING' %}
+                            <span class="badge bg-warning text-dark"><i class="fa-solid fa-clock me-1"></i> Verification Pending</span>
+                        {% else %}
+                            <span class="badge bg-danger"><i class="fa-solid fa-ban me-1"></i> Application Rejected</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-muted small mb-2">
+                        <i class="fa-solid fa-building me-1"></i> {{ user.profile.organization|default:"Independent Humanitarian Volunteer" }} &bull;
+                        <i class="fa-solid fa-location-crosshairs me-1 ms-2"></i> {{ responder_profile.service_area_name }} ({{ responder_profile.service_radius_km }}km radius) &bull;
+                        <i class="fa-solid fa-phone me-1 ms-2"></i> {{ user.profile.phone }}
+                    </p>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for s in responder_profile.get_skills_list %}
+                            <span class="badge bg-light text-dark border"><i class="fa-solid fa-certificate text-primary me-1"></i> {{ s|readable_tag }}</span>
+                        {% endfor %}
+                        {% for eq in responder_profile.get_equipment_list %}
+                            <span class="badge bg-light text-primary border"><i class="fa-solid fa-toolbox me-1"></i> {{ eq|readable_tag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="col-md-5 text-md-end mt-3 mt-md-0 border-start ps-md-4">
+                    <div class="mb-2">
+                        <span class="small text-muted text-uppercase fw-bold">Active Mission Capacity</span>
+                        <div class="fs-5 fw-bold text-navy">
+                            {{ responder_profile.current_active_assignments }} / {{ responder_profile.max_active_capacity }} Slots Occupied
+                        </div>
+                    </div>
+
+                    <!-- Availability Switcher Form -->
+                    <form method="post" action="{% url 'responder_toggle_availability' %}" class="d-flex justify-content-md-end align-items-center gap-2">
+                        {% csrf_token %}
+                        <label for="responder-availability" class="small fw-semibold text-muted mb-0">Duty Status:</label>
+                        <select id="responder-availability" name="availability" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+                            {% for av_code, av_label in availability_choices %}
+                                <option value="{{ av_code }}" {% if responder_profile.availability == av_code %}selected{% endif %}>
+                                    {{ av_label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 1: Pending Dispatches Requiring Acceptance (A07 Workflow) -->
+    <div class="card card-resq mb-4 border-warning">
+        <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center py-3">
+            <h5 class="fw-bold mb-0 text-dark">
+                <i class="fa-solid fa-bell text-warning me-2"></i> New Incident Dispatches Awaiting Action ({{ pending_assignments.count }})
+            </h5>
+            <span class="badge bg-warning text-dark">Immediate Response</span>
+        </div>
+        <div class="card-body p-0">
+            {% if pending_assignments %}
+                <div class="list-group list-group-flush">
+                    {% for assign in pending_assignments %}
+                        <div class="list-group-item p-4">
+                            <div class="row align-items-center">
+                                <div class="col-lg-8">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="badge {{ assign.incident.priority_level|priority_badge_class }} px-2 py-1">
+                                            {{ assign.incident.priority_level }} (Score: {{ assign.incident.priority_score }})
+                                        </span>
+                                        <h5 class="mb-0 fw-bold">
+                                            <a href="{% url 'incident_detail' assign.incident.incident_id %}" class="text-navy text-decoration-none">
+                                                {{ assign.incident.incident_id }}: {{ assign.incident.get_emergency_type_display }}
+                                            </a>
+                                        </h5>
+                                    </div>
+
+                                    <p class="text-muted small mb-2">
+                                        <i class="fa-solid fa-location-dot text-danger me-1"></i> {{ assign.incident.location_name }} &bull;
+                                        <i class="fa-solid fa-users text-secondary ms-2 me-1"></i> {{ assign.incident.affected_count }} affected
+                                        {% if assign.incident.injured_count > 0 %}&bull; <span class="text-danger fw-semibold">{{ assign.incident.injured_count }} injured</span>{% endif %}
+                                        {% if assign.incident.trapped_count > 0 %}&bull; <span class="text-danger fw-semibold">{{ assign.incident.trapped_count }} trapped</span>{% endif %}
+                                    </p>
+
+                                    <!-- Module C Match Explanation -->
+                                    <div class="p-2 bg-light rounded small text-dark mb-2">
+                                        <i class="fa-solid fa-circle-check text-success me-1"></i>
+                                        <strong>Intelligent Match:</strong> {{ assign.match_explanation }}
+                                    </div>
+                                    <p class="small text-muted mb-0">Dispatched {{ assign.assigned_at|timesince }} ago</p>
+                                </div>
+
+                                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                                    <div class="d-flex flex-column flex-sm-row justify-content-lg-end gap-2">
+                                        <!-- Accept Form -->
+                                        <form method="post" action="{% url 'assignment_accept' assign.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-success fw-bold w-100">
+                                                <i class="fa-solid fa-check me-1"></i> Accept Mission
+                                            </button>
+                                        </form>
+
+                                        <!-- Reject Trigger Modal Button -->
+                                        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectModal{{ assign.id }}">
+                                            <i class="fa-solid fa-xmark me-1"></i> Decline
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Decline Modal with Reassignment Trigger -->
+                        <div class="modal fade" id="rejectModal{{ assign.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form method="post" action="{% url 'assignment_reject' assign.id %}">
+                                        {% csrf_token %}
+                                        <div class="modal-header bg-danger text-white">
+                                            <h5 class="modal-title"><i class="fa-solid fa-triangle-exclamation me-2"></i> Decline Assignment</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p class="text-muted">
+                                                Declining this assignment will trigger <strong>Automated Reassignment (A07)</strong>. The system will immediately attempt to match the next available verified responder.
+                                            </p>
+                                            <div class="mb-3">
+                                                <label for="decline-reason-{{ assign.id }}" class="form-label fw-semibold">Reason for declining <span class="required-indicator">(required)</span></label>
+                                                <textarea id="decline-reason-{{ assign.id }}" name="rejection_reason" class="form-control" rows="3" required placeholder="e.g. In transit on another call, equipment undergoing maintenance, blocked road..."></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-danger">Confirm & Reassign</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="fa-solid fa-check-double text-success fs-3 mb-2"></i>
+                    <p class="mb-0">No pending dispatches awaiting acceptance. You are on standby.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Section 2: Active Responding Missions -->
+    <div class="card card-resq mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h5 class="fw-bold mb-0 text-navy">
+                <i class="fa-solid fa-truck-medical text-primary me-2"></i> Active Responding Missions ({{ active_assignments.count }})
+            </h5>
+            <span class="badge bg-primary">In Progress</span>
+        </div>
+        <div class="card-body p-0">
+            {% if active_assignments %}
+                <div class="list-group list-group-flush">
+                    {% for assign in active_assignments %}
+                        <div class="list-group-item p-4">
+                            <div class="row align-items-center">
+                                <div class="col-lg-8">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="badge {{ assign.incident.priority_level|priority_badge_class }} px-2 py-1">
+                                            {{ assign.incident.priority_level }}
+                                        </span>
+                                        <h5 class="mb-0 fw-bold">
+                                            <a href="{% url 'incident_detail' assign.incident.incident_id %}" class="text-navy text-decoration-none">
+                                                {{ assign.incident.incident_id }}: {{ assign.incident.get_emergency_type_display }}
+                                            </a>
+                                        </h5>
+                                        <span class="badge {{ assign.incident.status|status_badge_class }}">
+                                            {{ assign.incident.get_status_display }}
+                                        </span>
+                                    </div>
+
+                                    <p class="small text-muted mb-2">
+                                        <i class="fa-solid fa-location-dot text-danger me-1"></i> {{ assign.incident.location_name }} &bull;
+                                        <i class="fa-solid fa-phone text-secondary ms-2 me-1"></i> Contact: {{ assign.incident.contact_name }} ({{ assign.incident.contact_phone }})
+                                    </p>
+                                    <p class="small text-secondary mb-2">
+                                        <strong>Description:</strong> {{ assign.incident.description|truncatechars:140 }}
+                                    </p>
+                                    {% if assign.notes %}
+                                        <div class="p-2 bg-light rounded small text-muted font-monospace">
+                                            {{ assign.notes|linebreaksbr }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                                    <div class="d-flex flex-column gap-2">
+                                        {% if assign.incident.status == 'ACCEPTED' %}
+                                            <!-- Transition to RESPONDING -->
+                                            <form method="post" action="{% url 'incident_update_status' assign.incident.incident_id %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="status" value="RESPONDING">
+                                                <input type="hidden" name="notes" value="Emergency units deployed on-scene.">
+                                                <button type="submit" class="btn btn-primary fw-bold w-100">
+                                                    <i class="fa-solid fa-route me-1"></i> Mark Deployed / En Route
+                                                </button>
+                                            </form>
+                                        {% elif assign.incident.status == 'RESPONDING' %}
+                                            <!-- Log Progress Note Modal Trigger -->
+                                            <button type="button" class="btn btn-outline-primary btn-sm w-100" data-bs-toggle="modal" data-bs-target="#progressModal{{ assign.incident.incident_id }}">
+                                                <i class="fa-solid fa-pen-to-square me-1"></i> Log On-Scene Update
+                                            </button>
+                                            <!-- Evacuate to Shelter Button -->
+                                            <a href="{% url 'shelter_allocate' %}?incident_id={{ assign.incident.incident_id }}" class="btn btn-outline-success btn-sm w-100">
+                                                <i class="fa-solid fa-person-shelter me-1"></i> Evacuate to Shelter
+                                            </a>
+                                        {% endif %}
+
+                                        <!-- Resolve Mission Modal Button -->
+                                        <button type="button" class="btn btn-success fw-bold w-100" data-bs-toggle="modal" data-bs-target="#resolveModal{{ assign.incident.incident_id }}">
+                                            <i class="fa-solid fa-flag-checkered me-1"></i> Complete & Resolve
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Modal -->
+                        <div class="modal fade" id="progressModal{{ assign.incident.incident_id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form method="post" action="{% url 'incident_update_status' assign.incident.incident_id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="status" value="RESPONDING">
+                                        <div class="modal-header bg-primary text-white">
+                                            <h5 class="modal-title"><i class="fa-solid fa-pen-to-square me-2"></i> Log On-Scene Field Progress</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label for="progress-notes-{{ assign.incident.incident_id }}" class="form-label fw-semibold">On-Scene Status / Casualties Assisted <span class="required-indicator">(required)</span></label>
+                                                <textarea id="progress-notes-{{ assign.incident.incident_id }}" name="notes" class="form-control" rows="3" required placeholder="e.g. 2 victims evacuated safely to high ground; first aid administered for minor cuts; proceeding to extract remaining family."></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-primary">Save to Audit Log</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resolve Modal -->
+                        <div class="modal fade" id="resolveModal{{ assign.incident.incident_id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form method="post" action="{% url 'incident_update_status' assign.incident.incident_id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="status" value="RESOLVED">
+                                        <div class="modal-header bg-success text-white">
+                                            <h5 class="modal-title"><i class="fa-solid fa-circle-check me-2"></i> Resolve Incident {{ assign.incident.incident_id }}</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p class="text-muted small">
+                                                Marking this incident as resolved will complete your assignment, release your mission capacity slot, and record the event in the audit trail.
+                                            </p>
+                                            <div class="mb-3">
+                                                <label for="resolution-notes-{{ assign.incident.incident_id }}" class="form-label fw-semibold">Mission Resolution Notes <span class="required-indicator">(required)</span></label>
+                                                <textarea id="resolution-notes-{{ assign.incident.incident_id }}" name="notes" class="form-control" rows="3" required placeholder="e.g. All 4 victims evacuated safely to High School Shelter. First aid administered. Fire extinguished..."></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-success">Confirm Resolution</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">You currently have no active missions in progress.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Section 3: Mission History -->
+    {% if past_assignments %}
+        <div class="card card-resq">
+            <div class="card-header bg-white py-3">
+                <h6 class="fw-bold mb-0 text-navy"><i class="fa-solid fa-clock-rotate-left text-secondary me-2"></i> Past Mission History</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-resq table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Incident ID</th>
+                                <th>Type</th>
+                                <th>Priority</th>
+                                <th>Date</th>
+                                <th>Assignment Status</th>
+                                <th class="text-end">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for past in past_assignments %}
+                                <tr>
+                                    <td><strong>{{ past.incident.incident_id }}</strong></td>
+                                    <td>{{ past.incident.get_emergency_type_display }}</td>
+                                    <td><span class="badge {{ past.incident.priority_level|priority_badge_class }}">{{ past.incident.priority_level }}</span></td>
+                                    <td>{{ past.assigned_at|date:"M d, Y H:i" }}</td>
+                                    <td>
+                                        {% if past.status == 'COMPLETED' %}
+                                            <span class="badge bg-success">Completed</span>
+                                        {% elif past.status == 'REJECTED' %}
+                                            <span class="badge bg-secondary">Declined</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">{{ past.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'incident_detail' past.incident.incident_id %}" class="btn btn-outline-secondary btn-sm">View</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

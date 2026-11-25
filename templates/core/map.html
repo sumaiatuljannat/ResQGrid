@@ -1,0 +1,530 @@
+{% extends 'base.html' %}
+
+{% block title %}Live Emergency Grid & Tactical Map - ResQGrid{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-3">
+
+    <!-- Top Map Command Bar -->
+    <div class="card card-resq mb-3 shadow-sm border-0">
+        <div class="card-body p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h1 class="h3 fw-bold text-navy mb-1">
+                        <i class="fa-solid fa-map-location-dot text-primary me-2" aria-hidden="true"></i> Live Grid Map
+                    </h1>
+                    <small class="text-muted">Database-backed incidents, verified responders, and evacuation shelters across Bangladesh</small>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="recenterMap()">
+                        <i class="fa-solid fa-crosshairs me-1"></i> Center Bangladesh
+                    </button>
+                    <a href="{% url 'incident_create' %}" class="btn btn-danger btn-sm fw-bold">
+                        <i class="fa-solid fa-bell me-1"></i> Dispatch SOS
+                    </a>
+                </div>
+            </div>
+
+            <!-- Dynamic Multi-Filter Bar -->
+            <div class="row g-2 align-items-center">
+                <!-- Search -->
+                <div class="col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+                        <input type="text" id="mapSearchInput" class="form-control" aria-label="Search incidents by ID, landmark, location, or description" placeholder="Search ID, landmark, area..." oninput="applyFilters()">
+                    </div>
+                </div>
+
+                <!-- Priority Filter -->
+                <div class="col-sm-6 col-md-2">
+                    <select id="priorityFilter" class="form-select form-select-sm" aria-label="Filter incidents by priority" onchange="applyFilters()">
+                        <option value="ALL">All Priorities</option>
+                        <option value="CRITICAL">🔴 Critical Only</option>
+                        <option value="HIGH">🟠 High Priority</option>
+                        <option value="MEDIUM">🟡 Medium Priority</option>
+                        <option value="LOW">🟢 Low Priority</option>
+                    </select>
+                </div>
+
+                <!-- Emergency Type Filter -->
+                <div class="col-sm-6 col-md-2">
+                    <select id="typeFilter" class="form-select form-select-sm" aria-label="Filter incidents by emergency type" onchange="applyFilters()">
+                        <option value="ALL">All Emergency Types</option>
+                        {% for t_code, t_name in emergency_types %}
+                            <option value="{{ t_code }}">{{ t_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Layer Toggles -->
+                <div class="col-md-5 d-flex flex-wrap align-items-center gap-3">
+                    <div class="form-check form-check-inline small mb-0">
+                        <input class="form-check-input" type="checkbox" id="layerIncidents" checked onchange="toggleLayers()">
+                        <label class="form-check-label fw-semibold text-danger" for="layerIncidents">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i> Emergencies (<span id="countIncidents">{{ total_active_incidents }}</span>)
+                        </label>
+                    </div>
+
+                    <div class="form-check form-check-inline small mb-0">
+                        <input class="form-check-input" type="checkbox" id="layerShelters" checked onchange="toggleLayers()">
+                        <label class="form-check-label fw-semibold text-success" for="layerShelters">
+                            <i class="fa-solid fa-tents me-1"></i> Shelters (<span id="countShelters">{{ total_shelters }}</span>)
+                        </label>
+                    </div>
+
+                    <div class="form-check form-check-inline small mb-0">
+                        <input class="form-check-input" type="checkbox" id="layerResponders" checked onchange="toggleLayers()">
+                        <label class="form-check-label fw-semibold text-primary" for="layerResponders">
+                            <i class="fa-solid fa-truck-medical me-1"></i> Responders (<span id="countResponders">{{ total_responders }}</span>)
+                        </label>
+                    </div>
+
+                    <div class="form-check form-check-inline small mb-0">
+                        <input class="form-check-input" type="checkbox" id="layerRadii" checked onchange="toggleLayers()">
+                        <label class="form-check-label text-muted" for="layerRadii">Coverage Radius</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map & Side Feed Row -->
+    <div class="row g-3">
+        <!-- Interactive Leaflet Canvas -->
+        <div class="col-lg-9">
+            <div id="map-container" data-refresh-url="{% url 'map_data' %}" data-can-manage-shelters="{{ can_manage_shelters|yesno:'true,false' }}" data-can-allocate-from-incident="{{ can_allocate_from_incident|yesno:'true,false' }}" role="application" aria-label="Interactive live emergency response map"></div>
+        </div>
+
+        <!-- Right Side Quick Triage Feed -->
+        <div class="col-lg-3">
+            <div class="card card-resq map-feed-card h-100 shadow-sm">
+                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                    <span class="small fw-bold text-navy text-uppercase"><i class="fa-solid fa-fire text-danger me-1"></i> Active Emergencies</span>
+                    <span class="badge bg-danger" id="visibleIncidentCount">{{ total_active_incidents }}</span>
+                </div>
+                <div class="map-live-status px-2 py-1 small" aria-live="polite">
+                    <span id="mapDataStatus" role="status">Loading live map data…</span>
+                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" id="retryMapRefresh" onclick="refreshMapData()" hidden>Retry</button>
+                </div>
+                <div class="card-body p-0 overflow-auto flex-grow-1" id="incidentFeedList">
+                    <!-- Populated dynamically via JS -->
+                </div>
+                <div class="card-footer bg-light p-2 text-center small text-muted">
+                    Click any emergency to center on map
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ incidents_json|json_script:"incidents-data" }}
+{{ shelters_json|json_script:"shelters-data" }}
+{{ responders_json|json_script:"responders-data" }}
+
+<script>
+let map;
+let allIncidents = [];
+let allShelters = [];
+let allResponders = [];
+
+let incidentMarkers = [];
+let shelterMarkers = [];
+let responderMarkers = [];
+let responderCircles = [];
+let incidentLayer;
+let shelterLayer;
+let responderLayer;
+let coverageLayer;
+let refreshInProgress = false;
+let canManageShelters = false;
+let canAllocateFromIncident = false;
+
+function escapeHtml(value) {
+    const element = document.createElement('span');
+    element.textContent = value == null ? '' : String(value);
+    return element.innerHTML;
+}
+
+// Haversine formula for proximity calculation
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return (R * c).toFixed(1);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const mapContainer = document.getElementById('map-container');
+    canManageShelters = mapContainer.dataset.canManageShelters === 'true';
+    canAllocateFromIncident = mapContainer.dataset.canAllocateFromIncident === 'true';
+    allIncidents = JSON.parse(document.getElementById('incidents-data').textContent);
+    allShelters = JSON.parse(document.getElementById('shelters-data').textContent);
+    allResponders = JSON.parse(document.getElementById('responders-data').textContent);
+
+    // Initialize Map on Bangladesh
+    map = L.map('map-container').setView([23.8103, 90.4125], 8);
+
+    ResQGridMaps.addBasemaps(map);
+
+    incidentLayer = L.layerGroup().addTo(map);
+    shelterLayer = L.layerGroup().addTo(map);
+    responderLayer = L.layerGroup().addTo(map);
+    coverageLayer = L.layerGroup().addTo(map);
+    renderShelters();
+    renderResponders();
+    applyFilters();
+    toggleLayers();
+    ResQGridMaps.watchResize(map);
+    document.getElementById('mapDataStatus').textContent = 'Map data loaded from the database.';
+    refreshMapData();
+    window.setInterval(refreshMapData, 30000);
+
+    // Handle URL focus param
+    const params = new URLSearchParams(window.location.search);
+    const focusId = params.get('focus');
+    if (focusId) {
+        focusOnIncident(focusId);
+    }
+});
+
+function refreshMapData() {
+    if (refreshInProgress) {
+        return;
+    }
+
+    refreshInProgress = true;
+    document.getElementById('mapDataStatus').textContent = 'Refreshing live map data…';
+    document.getElementById('retryMapRefresh').hidden = true;
+    const url = document.getElementById('map-container').dataset.refreshUrl;
+
+    fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Map refresh returned HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            if (!Array.isArray(data.incidents) || !Array.isArray(data.shelters) ||
+                    !Array.isArray(data.responders)) {
+                throw new Error('Map refresh returned an invalid data shape.');
+            }
+
+            const openIncident = incidentMarkers.find(function(marker) {
+                return marker.isPopupOpen();
+            });
+            const openIncidentId = openIncident ? openIncident.incidentId : null;
+            allIncidents = data.incidents;
+            allShelters = data.shelters;
+            allResponders = data.responders;
+            renderShelters();
+            renderResponders();
+            applyFilters();
+            toggleLayers();
+            document.getElementById('mapDataStatus').textContent =
+                'Live data updated ' + new Date().toLocaleTimeString();
+            if (openIncidentId) {
+                focusOnIncident(openIncidentId);
+            }
+        })
+        .catch(function(error) {
+            console.error('Unable to refresh live map data:', error);
+            document.getElementById('mapDataStatus').textContent =
+                'Live update failed; showing the last loaded data.';
+            document.getElementById('retryMapRefresh').hidden = false;
+        })
+        .finally(function() {
+            refreshInProgress = false;
+        });
+}
+
+// Render Shelters
+function renderShelters() {
+    shelterLayer.clearLayers();
+    shelterMarkers = [];
+    document.getElementById('countShelters').textContent = allShelters.length;
+    allShelters.forEach(function(s) {
+        const shelterIcon = L.divIcon({
+            html: '<div class="map-marker-shelter"><i class="fa-solid fa-tents"></i></div>',
+            className: 'custom-shelter-marker',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
+        });
+
+        const marker = L.marker([s.lat, s.lon], { icon: shelterIcon });
+        const pctColor = s.occupancy_pct > 90 ? 'bg-danger' : (s.occupancy_pct > 70 ? 'bg-warning' : 'bg-success');
+
+        const popupContent = `
+            <div style="min-width: 220px; font-family: sans-serif;">
+                <div style="font-weight: 700; color: #16a34a; font-size: 1rem; margin-bottom: 2px;">
+                    <i class="fa-solid fa-tents me-1"></i> ${escapeHtml(s.name)}
+                </div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 6px;">${escapeHtml(s.address)}</div>
+                <div style="margin-bottom: 6px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 2px;">
+                        <span>Capacity:</span>
+                        <strong>${s.occupied}/${s.total} (${s.occupancy_pct}%)</strong>
+                    </div>
+                    <div style="background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden;">
+                        <div style="width: ${s.occupancy_pct}%; background: ${s.occupancy_pct > 90 ? '#dc2626' : '#16a34a'}; height: 100%;"></div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: ${s.available > 0 ? '#16a34a' : '#dc2626'}; font-weight: 600; text-align: right; margin-top: 2px;">
+                        ${s.available} free spot(s)
+                    </div>
+                </div>
+                <div style="font-size: 0.75rem; color: #475569; margin-bottom: 8px;">
+                    ${s.food ? '🍚 Food ' : ''}
+                    ${s.water ? '💧 Water ' : ''}
+                    ${s.medical ? '🩹 Medical' : ''}
+                </div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 8px;">
+                    <i class="fa-solid fa-phone me-1"></i> ${escapeHtml(s.contact_person)} (${escapeHtml(s.contact_phone)})
+                </div>
+                ${canManageShelters ? `<a href="/shelters/allocate/?shelter_id=${s.id}" style="display: block; text-align: center; background: #16a34a; color: white; text-decoration: none; padding: 5px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;"><i class="fa-solid fa-user-plus me-1"></i> Allocate Evacuees</a>` : ''}
+            </div>
+        `;
+        marker.bindPopup(popupContent);
+        marker.addTo(shelterLayer);
+        shelterMarkers.push(marker);
+    });
+}
+
+// Render Responders & Coverage Circles
+function renderResponders() {
+    responderLayer.clearLayers();
+    coverageLayer.clearLayers();
+    responderMarkers = [];
+    responderCircles = [];
+    document.getElementById('countResponders').textContent = allResponders.length;
+    allResponders.forEach(function(r) {
+        const statusClass = r.availability === 'AVAILABLE' ? 'is-available' :
+            (r.availability === 'BUSY' ? 'is-busy' : 'is-offline');
+        const statusColor = r.availability === 'AVAILABLE' ? '#16a34a' :
+            (r.availability === 'BUSY' ? '#ea580c' : '#64748b');
+        const respIcon = L.divIcon({
+            html: '<div class="map-marker-responder ' + statusClass + '"><i class="fa-solid fa-truck-medical"></i></div>',
+            className: 'custom-responder-marker',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
+        });
+
+        const marker = L.marker([r.lat, r.lon], { icon: respIcon });
+        const skillsBadges = r.skills.map(s => `<span style="background: #e0f2fe; color: #0369a1; padding: 1px 4px; border-radius: 3px; font-size: 0.7rem; margin-right: 2px;">${escapeHtml(s)}</span>`).join(' ');
+        const equipBadges = r.equipment.map(e => `<span style="background: #f1f5f9; color: #334155; padding: 1px 4px; border-radius: 3px; font-size: 0.7rem; margin-right: 2px;">${escapeHtml(e)}</span>`).join(' ');
+
+        const popupContent = `
+            <div style="min-width: 230px; font-family: sans-serif;">
+                <div style="font-weight: 700; color: #1e3a8a; font-size: 0.95rem;">
+                    <i class="fa-solid fa-user-shield me-1"></i> ${escapeHtml(r.name)}
+                </div>
+                <div style="font-size: 0.78rem; color: #64748b; margin-bottom: 4px;">${escapeHtml(r.org)} &bull; ${escapeHtml(r.phone)}</div>
+                <div style="font-size: 0.78rem; margin-bottom: 4px;">
+                    <strong>Duty:</strong> <span style="font-weight: 700; color: ${statusColor};">${escapeHtml(r.availability_display)}</span>
+                    (${r.active_assignments}/${r.max_capacity} missions busy)
+                </div>
+                <div style="font-size: 0.75rem; margin-bottom: 4px;">
+                    <strong>Base Coverage:</strong> ${escapeHtml(r.area)} (${escapeHtml(r.radius_km)} km)
+                </div>
+                <div style="margin-bottom: 4px;">${skillsBadges}</div>
+                <div style="margin-bottom: 2px;">${equipBadges}</div>
+            </div>
+        `;
+        marker.bindPopup(popupContent);
+        marker.addTo(responderLayer);
+        responderMarkers.push(marker);
+
+        // Coverage circle
+        const circle = L.circle([r.lat, r.lon], {
+            radius: r.radius_km * 1000,
+            color: '#1d4ed8',
+            weight: 1,
+            dashArray: '4, 4',
+            fillColor: '#3b82f6',
+            fillOpacity: 0.08
+        }).addTo(coverageLayer);
+        responderCircles.push(circle);
+    });
+}
+
+// Render Incidents with Pulsating Effects & Proximity
+function renderIncidents(incidentsToRender) {
+    incidentLayer.clearLayers();
+    incidentMarkers = [];
+
+    const feedList = document.getElementById('incidentFeedList');
+    feedList.innerHTML = '';
+    document.getElementById('visibleIncidentCount').textContent = incidentsToRender.length;
+    document.getElementById('countIncidents').textContent = incidentsToRender.length;
+    if (!incidentsToRender.length) {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.className = 'p-3 small text-muted text-center';
+        emptyMessage.textContent = allIncidents.length
+            ? 'No emergencies match the current search and filters.'
+            : 'No active emergencies are available.';
+        feedList.appendChild(emptyMessage);
+    }
+
+    incidentsToRender.forEach(function(inc) {
+        let iconHtml;
+        if (inc.priority === 'CRITICAL') {
+            iconHtml = '<div class="pulse-marker-critical"><i class="fa-solid fa-triangle-exclamation"></i></div>';
+        } else if (inc.priority === 'HIGH') {
+            iconHtml = '<div class="map-marker-high"><i class="fa-solid fa-bolt"></i></div>';
+        } else if (inc.priority === 'LOW') {
+            iconHtml = '<div class="map-marker-low"><i class="fa-solid fa-info"></i></div>';
+        } else {
+            iconHtml = '<div class="map-marker-medium"><i class="fa-solid fa-circle-exclamation"></i></div>';
+        }
+
+        const customIcon = L.divIcon({
+            html: iconHtml,
+            className: 'custom-incident-marker',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        });
+
+        const marker = L.marker([inc.lat, inc.lon], { icon: customIcon });
+
+        // Calculate nearest shelter
+        let nearestShelterText = "None available";
+        let nearestShelterId = null;
+        let minDistance = 99999;
+        allShelters.forEach(function(s) {
+            if (s.available > 0) {
+                const dist = parseFloat(getDistanceKm(inc.lat, inc.lon, s.lat, s.lon));
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestShelterText = `${s.name} (${dist} km - ${s.available} free)`;
+                    nearestShelterId = s.id;
+                }
+            }
+        });
+
+        const popupContent = `
+            <div style="min-width: 240px; font-family: sans-serif;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-weight: 700; font-size: 0.95rem; color: #0f172a;">${escapeHtml(inc.id)}</span>
+                    <span style="background: ${inc.priority === 'CRITICAL' ? '#dc2626' : (inc.priority === 'HIGH' ? '#ea580c' : (inc.priority === 'LOW' ? '#0d9488' : '#2563eb'))}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">
+                        ${escapeHtml(inc.priority)} (${escapeHtml(inc.score)} pts)
+                    </span>
+                </div>
+                <div style="font-size: 0.82rem; font-weight: 600; color: #1e293b; margin-bottom: 2px;">${escapeHtml(inc.type_display)}</div>
+                <div style="font-size: 0.78rem; color: #64748b; margin-bottom: 6px;">
+                    <i class="fa-solid fa-location-dot text-danger"></i> ${escapeHtml(inc.location)}
+                </div>
+                <div style="font-size: 0.78rem; color: #475569; margin-bottom: 6px;">
+                    ${escapeHtml(inc.description)}
+                </div>
+                <div style="font-size: 0.78rem; margin-bottom: 6px; background: #f8fafc; padding: 4px; border-radius: 4px;">
+                    <strong>Casualties:</strong> ${inc.affected} affected &bull;
+                    <span style="color: #dc2626; font-weight: 600;">${inc.injured} injured</span> &bull;
+                    <span style="color: #1e293b; font-weight: 600;">${inc.trapped} trapped</span>
+                </div>
+                <div style="font-size: 0.75rem; color: #475569; margin-bottom: 6px;">
+                    <strong>Nearest Shelter:</strong> ${escapeHtml(nearestShelterText)}
+                </div>
+                <div style="display: flex; gap: 4px;">
+                    <a href="/incidents/${encodeURIComponent(inc.id)}/" style="flex: 1; text-align: center; background: #1d4ed8; color: white; text-decoration: none; padding: 4px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">
+                        Mission Details
+                    </a>
+                    ${nearestShelterId && canAllocateFromIncident ? `<a href="/shelters/allocate/?shelter_id=${nearestShelterId}&incident_id=${encodeURIComponent(inc.id)}" style="flex: 1; text-align: center; background: #16a34a; color: white; text-decoration: none; padding: 4px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">Evacuate Here</a>` : ''}
+                </div>
+            </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        marker.addTo(incidentLayer);
+        marker.incidentId = inc.id;
+        incidentMarkers.push(marker);
+
+        // Add to side list feed
+        const item = document.createElement('div');
+        item.className = 'p-2 border-bottom cursor-pointer hover-bg-light';
+        item.style.cursor = 'pointer';
+        item.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong class="small text-navy">${escapeHtml(inc.id)}</strong>
+                <span class="badge ${inc.priority === 'CRITICAL' ? 'bg-danger' : (inc.priority === 'HIGH' ? 'bg-warning text-dark' : 'bg-primary')}">${escapeHtml(inc.priority)}</span>
+            </div>
+            <div class="small fw-semibold text-truncate">${escapeHtml(inc.type_display)}</div>
+            <div class="small text-muted text-truncate"><i class="fa-solid fa-location-dot text-danger me-1"></i>${escapeHtml(inc.location)}</div>
+        `;
+        item.onclick = function() {
+            focusOnIncident(inc.id);
+        };
+        feedList.appendChild(item);
+    });
+}
+
+function focusOnIncident(id) {
+    let marker = incidentMarkers.find(m => m.incidentId === id);
+    if (!marker && allIncidents.some(function(incident) { return incident.id === id; })) {
+        document.getElementById('mapSearchInput').value = '';
+        document.getElementById('priorityFilter').value = 'ALL';
+        document.getElementById('typeFilter').value = 'ALL';
+        applyFilters();
+        marker = incidentMarkers.find(m => m.incidentId === id);
+    }
+    if (marker) {
+        if (!document.getElementById('layerIncidents').checked) {
+            document.getElementById('layerIncidents').checked = true;
+            toggleLayers();
+        }
+        map.setView(marker.getLatLng(), 13);
+        marker.openPopup();
+    }
+}
+
+// Client-Side Multi-Filter Function
+function applyFilters() {
+    const q = document.getElementById('mapSearchInput').value.toLowerCase().trim();
+    const priority = document.getElementById('priorityFilter').value;
+    const type = document.getElementById('typeFilter').value;
+
+    const filtered = allIncidents.filter(function(inc) {
+        const matchesQ = !q || String(inc.id || '').toLowerCase().includes(q) ||
+                         String(inc.location || '').toLowerCase().includes(q) ||
+                         String(inc.description || '').toLowerCase().includes(q);
+        const matchesPriority = (priority === 'ALL') || (inc.priority === priority);
+        const matchesType = (type === 'ALL') || (inc.type === type);
+        return matchesQ && matchesPriority && matchesType;
+    });
+
+    renderIncidents(filtered);
+}
+
+// Layer visibility switcher
+function toggleLayers() {
+    const showIncidents = document.getElementById('layerIncidents').checked;
+    const showShelters = document.getElementById('layerShelters').checked;
+    const showResponders = document.getElementById('layerResponders').checked;
+    const showRadii = document.getElementById('layerRadii').checked;
+
+    [
+        [incidentLayer, showIncidents],
+        [shelterLayer, showShelters],
+        [responderLayer, showResponders],
+        [coverageLayer, showResponders && showRadii]
+    ].forEach(function(item) {
+        const layer = item[0];
+        const visible = item[1];
+        if (visible && !map.hasLayer(layer)) {
+            map.addLayer(layer);
+        } else if (!visible && map.hasLayer(layer)) {
+            map.removeLayer(layer);
+        }
+    });
+}
+
+function recenterMap() {
+    map.setView([23.8103, 90.4125], 8);
+}
+</script>
+{% endblock %}
