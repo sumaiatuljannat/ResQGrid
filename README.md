@@ -28,7 +28,7 @@ During large-scale climate and civil emergencies in Bangladesh (such as monsoon 
 
 ## 2. Technology Stack
 
-- **Backend:** Python 3.14 + Django 5.2
+- **Backend:** Python 3.12.0 + Django 5.2
 - **Database:** SQLite by default for local development; production can use a persistent database through `DATABASE_URL`
 - **Frontend:** Responsive HTML5, Bootstrap 5.3, FontAwesome 6, Chart.js
 - **Geospatial & Mapping:** Leaflet 1.9 + OpenStreetMap (actual saved coordinates for incidents and shelters)
@@ -156,7 +156,7 @@ After running the local seed command, the seeded demo accounts use the password 
 - For Render, set `RESQGRID_ENV=production`, `DEBUG=False`, a generated `SECRET_KEY`, and `DATABASE_URL` pointing to a persistent PostgreSQL service. Production settings fail closed if the secret or PostgreSQL URL is missing, or if the URL selects a non-PostgreSQL database.
 - Local development uses SQLite when `DATABASE_URL` is unset. Do not rely on SQLite or an ephemeral filesystem for deployed incident, responder, or shelter data.
 - Configure `ALLOWED_HOSTS` for custom domains. Render's `RENDER_EXTERNAL_HOSTNAME` is added automatically and also enables Django's forwarded-HTTPS proxy setting. Add any custom HTTPS origins to `CSRF_TRUSTED_ORIGINS`.
-- The Render blueprint enforces HTTPS redirects and sets a short initial HSTS policy. Confirm the provider's TLS/proxy behavior before increasing HSTS duration; enable subdomain or preload policies only after confirming every covered domain supports HTTPS.
+- The Render blueprint sets `SECURE_SSL_REDIRECT=True` and `SECURE_HSTS_SECONDS=3600`, enabling HTTPS redirects and a short, one-hour HSTS policy. Verify HTTPS on the production hostname, including the provider's TLS and proxy behavior, before increasing the HSTS duration. Keep `SECURE_HSTS_INCLUDE_SUBDOMAINS=False` unless every subdomain can reliably serve HTTPS, because this extends HSTS to all subdomains. Keep `SECURE_HSTS_PRELOAD=False` unless the domain meets the browser preload-list requirements, including HTTPS support across the domain and its subdomains; preloading can be difficult to reverse.
 - Database initialization and deployment commands:
   ```powershell
   python manage.py migrate
@@ -236,7 +236,7 @@ ResQGrid includes deployment configuration for Render:
 2. The build installs `requirements.txt`, applies migrations, and collects compressed static files without seeding demo data. WhiteNoise serves the compressed assets.
 3. Configure a persistent PostgreSQL `DATABASE_URL`; production startup/settings reject a missing URL or SQLite configuration. Database SSL is required when `DEBUG=False`.
 4. Configure `RESQGRID_ENV=production`, `DEBUG=False`, and a generated `SECRET_KEY`; Render's assigned hostname is added to `ALLOWED_HOSTS` and trusted HTTPS origins automatically.
-5. HTTPS redirect and HSTS remain opt-in until the deployed hostname/proxy has been checked. A local configuration check does not verify a live Render deployment or PostgreSQL restart durability.
+5. The blueprint enables HTTPS redirects and sets a short initial HSTS policy (`SECURE_HSTS_SECONDS=3600`). Verify HTTPS with the live hostname and proxy before increasing the HSTS duration; keep the subdomain and preload flags disabled unless their requirements above are met. A local configuration check does not verify a live Render deployment or PostgreSQL restart durability.
 
 ---
 
